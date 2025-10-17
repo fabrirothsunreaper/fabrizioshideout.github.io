@@ -154,6 +154,9 @@
         let carrito = new Map(); 
         let totalCardsDisplayed = 0; // Contador para llevar la cuenta de todas las impresiones mostradas
 
+        // Función auxiliar para un pequeño retardo entre llamadas (buena práctica para la API de Scryfall)
+        const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+
         /**
          * Realiza la búsqueda inicial de todas las cartas que coincidan con el término
          * y luego busca todas las impresiones (prints) en inglés para cada una de ellas.
@@ -193,7 +196,7 @@
                 if (data.data && data.data.length > 0) {
                     const uniqueCards = data.data; // Cartas únicas por concepto
                     
-                    estadoP.textContent = `Encontradas ${uniqueCards.length} cartas únicas. Buscando solo impresiones en inglés...`;
+                    estadoP.textContent = `Encontradas ${uniqueCards.length} cartas únicas. Buscando solo impresiones en inglés... (puede tardar si hay muchas variantes)`;
 
                     // Realizar todas las llamadas a la API de impresiones en paralelo
                     const fetchPromises = uniqueCards.map(card => {
@@ -225,29 +228,50 @@
         }
 
         /**
-         * Busca todas las impresiones (prints) de una carta en idioma INGLÉS utilizando su oracle_id.
+         * Busca TODAS las impresiones (prints) de una carta en idioma INGLÉS utilizando su oracle_id,
+         * manejando la PAGINACIÓN para obtener más de 175 resultados.
          * @param {string} oracleId - El ID de oráculo único de la carta.
          * @param {string} cardName - El nombre de la carta (para el mensaje de estado).
          */
         async function fetchTodasLasImpresiones(oracleId, cardName) {
-            // Se usa lang:en para filtrar solo las impresiones en inglés.
-            const allPrintsQuery = `https://api.scryfall.com/cards/search?q=oracleid:${oracleId}%20lang:en&order=released&unique=prints`;
+            // Consulta inicial: lang:en para filtrar solo impresiones en inglés, ordenadas por lanzamiento
+            let currentPageUrl = `https://api.scryfall.com/cards/search?q=oracleid:${oracleId}%20lang:en&order=released&unique=prints`;
+            let hasMore = true;
+            let allPrints = [];
+
+            while (hasMore) {
+                try {
+                    const response = await fetch(currentPageUrl);
+                    const data = await response.json();
+
+                    if (data.object === 'error') {
+                        console.warn(`Advertencia: Error al obtener impresiones de ${cardName} en inglés. Detalle: ${data.details}`);
+                        break; // Sale del bucle si hay un error
+                    }
+
+                    if (data.data && data.data.length > 0) {
+                        allPrints = allPrints.concat(data.data);
+                    }
+
+                    hasMore = data.has_more;
+                    if (hasMore && data.next_page) {
+                        currentPageUrl = data.next_page;
+                        // Pausa de 50ms para respetar las políticas de la API
+                        await delay(50); 
+                    } else {
+                        hasMore = false;
+                    }
+
+                } catch (error) {
+                    console.error(`Error al obtener todas las impresiones de ${cardName}:`, error);
+                    hasMore = false;
+                }
+            }
             
-            try {
-                const response = await fetch(allPrintsQuery);
-                const data = await response.json();
-
-                if (data.object === 'error') {
-                    console.warn(`Advertencia: Error al obtener impresiones de ${cardName} en inglés. Detalle: ${data.details}`);
-                    return;
-                }
-
-                if (data.data && data.data.length > 0) {
-                    mostrarCartas(data.data); // Muestra solo las impresiones en inglés
-                    totalCardsDisplayed += data.data.length;
-                }
-            } catch (error) {
-                console.error(`Error al obtener todas las impresiones de ${cardName}:`, error);
+            // Procesa y muestra todas las impresiones recopiladas
+            if (allPrints.length > 0) {
+                mostrarCartas(allPrints);
+                totalCardsDisplayed += allPrints.length;
             }
         }
 
