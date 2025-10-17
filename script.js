@@ -1,4 +1,3 @@
- 
 // --- CONSTANTES Y REFERENCIAS DEL DOM ---
 const API_URL = 'https://api.scryfall.com/cards/search?q=';
 const resultadosDiv = document.getElementById('resultados');
@@ -17,37 +16,40 @@ const btnEnviarEmail = document.getElementById('btn-enviar-email');
 // Correo del destinatario (Fabrizio)
 const TARGET_EMAIL = 'fabriroth.sunreaper@gmail.com'; 
 
-// Almacenamiento global para el carrito: Map<cardId, cardObject>
+// Almacenamiento global para el carrito: Map<uniqueItemId, itemObject>
 let carrito = new Map(); 
+let totalCardsDisplayed = 0; // Contador para llevar la cuenta de todas las impresiones mostradas
 
 /**
- * Realiza la búsqueda de cartas en la API de Scryfall.
+ * Realiza la búsqueda inicial de todas las cartas que coincidan con el término
+ * y luego busca todas las impresiones (prints) en inglés para cada una de ellas.
  */
 async function buscarCartas() {
     const termino = document.getElementById('termino-busqueda').value.trim();
     resultadosDiv.innerHTML = ''; // Limpiar resultados anteriores
     estadoP.textContent = ''; // Limpiar mensajes
+    totalCardsDisplayed = 0; // Resetear contador
 
     if (!termino) {
-        estadoP.textContent = '⚠️ Por favor, introduce un término de búsqueda.';
+        estadoP.textContent = ' Por favor, introduce un término de búsqueda.';
         return;
     }
 
-    estadoP.textContent = '⏳ Buscando cartas...';
+    estadoP.textContent = ' Buscando cartas únicas que coincidan con el texto...';
 
     try {
-        // Se fuerza el filtro 'lang:es' para que la API priorice la búsqueda 
-        // por nombres y textos de cartas en español.
+        // Paso 1: Buscar cartas únicas que coincidan con el término. 
+        // Se usa 'lang:es' para que la búsqueda inicial acepte nombres de cartas en español.
+        // Usamos `unique=cards` para obtener un representante de cada concepto (oracle_id).
         const encodedTermino = encodeURIComponent(termino);
-        const finalQuery = `${encodedTermino}%20lang:es`; 
+        const firstSearchQuery = `${API_URL}${encodedTermino}%20lang:es&unique=cards`; 
         
-        const response = await fetch(`${API_URL}${finalQuery}&unique=prints`);
+        const response = await fetch(firstSearchQuery);
         const data = await response.json();
 
         if (data.object === 'error') {
-            // Manejo de errores amigable si no se encuentra la carta
             if (data.details && data.details.includes('No cards found matching')) {
-                estadoP.textContent = '🙁 Carta no encontrada. Intenta con otro nombre o filtro.';
+                estadoP.textContent = ' No se encontraron cartas que coincidan. Intenta con otro nombre o filtro.';
                 return; 
             } else {
                 throw new Error(data.details || 'Error inesperado de Scryfall.');
@@ -55,21 +57,63 @@ async function buscarCartas() {
         }
 
         if (data.data && data.data.length > 0) {
-            estadoP.textContent = `✅ Encontradas ${data.total_cards} cartas. Mostrando las primeras ${data.data.length}.`;
-            mostrarCartas(data.data);
+            const uniqueCards = data.data; // Cartas únicas por concepto
+            
+            estadoP.textContent = `Encontradas ${uniqueCards.length} cartas únicas. Buscando solo impresiones en inglés...`;
+
+            // Realizar todas las llamadas a la API de impresiones en paralelo
+            const fetchPromises = uniqueCards.map(card => {
+                // Solo buscamos impresiones si tiene un oracle_id
+                if (card.oracle_id) {
+                    return fetchTodasLasImpresiones(card.oracle_id, card.name);
+                }
+                return Promise.resolve(); 
+            });
+
+            // Esperamos a que todas las búsquedas de impresiones terminen
+            await Promise.all(fetchPromises);
+
+            // Mensaje de resumen final
+            if (totalCardsDisplayed > 0) {
+                estadoP.textContent = `✅ Búsqueda completa. Se encontraron y mostraron ${totalCardsDisplayed} impresiones en inglés de ${uniqueCards.length} cartas únicas.`;
+            } else {
+                estadoP.textContent = ' No se encontraron impresiones válidas en inglés para las cartas halladas.';
+            }
+
         } else {
-            estadoP.textContent = '🙁 Carta no encontrada. Intenta con otro nombre o filtro.';
+            estadoP.textContent = ' No se encontraron cartas que coincidan. Intenta con otro nombre o filtro.';
         }
 
     } catch (error) {
         console.error('Error de la API o de la red:', error);
-        
-        // Manejo de errores de conexión/red
-        if (error.message.includes('No cards found matching') || error.message.includes('Error inesperado de Scryfall')) {
-            estadoP.textContent = '🙁 Carta no encontrada. Intenta con otro nombre o filtro.';
-        } else {
-            estadoP.textContent = `❌ Error de conexión o red: ${error.message}`;
+        estadoP.textContent = ` Error de conexión o red: ${error.message}`;
+    }
+}
+
+/**
+ * Busca todas las impresiones (prints) de una carta en idioma INGLÉS utilizando su oracle_id.
+ * @param {string} oracleId - El ID de oráculo único de la carta.
+ * @param {string} cardName - El nombre de la carta (para el mensaje de estado).
+ */
+async function fetchTodasLasImpresiones(oracleId, cardName) {
+    // Se usa lang:en para filtrar solo las impresiones en inglés.
+    const allPrintsQuery = `https://api.scryfall.com/cards/search?q=oracleid:${oracleId}%20lang:en&order=released&unique=prints`;
+    
+    try {
+        const response = await fetch(allPrintsQuery);
+        const data = await response.json();
+
+        if (data.object === 'error') {
+            console.warn(`Advertencia: Error al obtener impresiones de ${cardName} en inglés. Detalle: ${data.details}`);
+            return;
         }
+
+        if (data.data && data.data.length > 0) {
+            mostrarCartas(data.data); // Muestra solo las impresiones en inglés
+            totalCardsDisplayed += data.data.length;
+        }
+    } catch (error) {
+        console.error(`Error al obtener todas las impresiones de ${cardName}:`, error);
     }
 }
 
@@ -84,18 +128,20 @@ function mostrarCartas(cartas) {
         const cardWrapper = document.createElement('div');
         cardWrapper.dataset.cardData = JSON.stringify(carta); 
         
-        cardWrapper.className = `w-full max-w-xs bg-gray-900 rounded-xl overflow-hidden shadow-xl card-result flex flex-col justify-between border border-gray-700`;
+        // Estilos de la tarjeta, ajustados para la cuadrícula
+        cardWrapper.className = `w-full max-w-[150px] sm:max-w-[180px] bg-gray-900 rounded-xl overflow-hidden shadow-xl card-result flex flex-col justify-between border border-gray-700`;
         
         let cardContentHTML = '';
 
         if (isDoubleFaced) {
             cardWrapper.classList.add('double-face-card');
+            cardWrapper.style.height = '240px'; 
             
             // Contenedor de las caras (para el efecto flip)
-            cardContentHTML += crearCaraHTML(carta.card_faces[0], 'front-face');
-            cardContentHTML += crearCaraHTML(carta.card_faces[1], 'back-face');
+            cardContentHTML += crearCaraHTML(carta.card_faces[0], 'front-face', carta.id);
+            cardContentHTML += crearCaraHTML(carta.card_faces[1], 'back-face', carta.id);
 
-            // Al hacer clic en la carta, se voltea
+            // Manejo del evento flip
             cardWrapper.addEventListener('click', (e) => {
                 // Evita el flip si se hace clic en el botón Añadir al Carrito
                 if (!e.target.closest('button')) {
@@ -108,11 +154,11 @@ function mostrarCartas(cartas) {
             const imagen_uri = carta.image_uris ? carta.image_uris.normal : null;
             
             if (imagen_uri) {
-                 cardContentHTML = `
+                cardContentHTML = `
                     <img src="${imagen_uri}" alt="Imagen de ${carta.name}" class="w-full h-auto object-cover rounded-t-xl" onerror="this.onerror=null; this.src='https://placehold.co/680x960/FFD700/000?text=Card+No+Image'">
-                    <div class="p-3 text-center">
-                        <h3 class="text-xl font-bold text-amber-300">${carta.name}</h3>
-                        <p class="text-sm text-gray-400">${carta.type_line}</p>
+                    <div class="p-2 text-center">
+                        <h3 class="text-sm font-bold text-amber-300 truncate">${carta.name}</h3>
+                        <p class="text-xs text-gray-400">${carta.set_name} (${carta.set.toUpperCase()})</p>
                     </div>
                 `;
             }
@@ -120,11 +166,11 @@ function mostrarCartas(cartas) {
         
         // Botón Añadir al Carrito
         const buttonHTML = `
-            <div class="p-3">
+            <div class="p-2">
                 <button onclick="agregarAlCarrito(this)" 
                     data-card-id="${carta.id}" 
-                    class="w-full bg-amber-600 hover:bg-amber-700 text-gray-900 font-semibold py-2 rounded-lg transition duration-150 transform hover:scale-[1.02]">
-                    + Añadir al Carrito
+                    class="w-full bg-amber-600 hover:bg-amber-700 text-gray-900 text-sm font-semibold py-1 rounded-lg transition duration-150 transform hover:scale-[1.02]">
+                    + Añadir
                 </button>
             </div>
         `;
@@ -145,16 +191,17 @@ function mostrarCartas(cartas) {
  * Genera el HTML para una cara de una carta (simple o doble).
  * @param {Object} faceData - Objeto de la cara de la carta.
  * @param {string} faceClass - Clase CSS para la cara.
+ * @param {string} cardId - ID de la carta padre.
  * @returns {string} HTML de la cara.
  */
-function crearCaraHTML(faceData, faceClass) {
-    const imagen_uri = faceData.image_uris ? faceData.image_uris.normal : null;
+function crearCaraHTML(faceData, faceClass, cardId) {
+    const imageUri = faceData.image_uris ? faceData.image_uris.normal : null;
 
-    if (!imagen_uri) return '';
+    if (!imageUri) return '';
 
     return `
-        <div class="face ${faceClass} w-full h-full bg-gray-900 rounded-xl overflow-hidden shadow-xl" style="position: absolute;">
-            <img src="${imagen_uri}" alt="Imagen de ${faceData.name}" class="w-full h-full object-cover rounded-xl" onerror="this.onerror=null; this.src='https://placehold.co/680x960/FFD700/000?text=Card+No+Image'">
+        <div class="face ${faceClass} w-full h-full bg-gray-900 rounded-xl overflow-hidden shadow-xl" style="position: absolute; border: 1px solid #4a5568;">
+            <img src="${imageUri}" alt="Imagen de ${faceData.name}" class="w-full h-full object-cover rounded-xl" onerror="this.onerror=null; this.src='https://placehold.co/680x960/FFD700/000?text=Card+No+Image'">
         </div>
     `;
 }
@@ -168,15 +215,23 @@ function agregarAlCarrito(buttonElement) {
     const cardWrapper = buttonElement.closest('.card-result');
     const cardData = JSON.parse(cardWrapper.dataset.cardData);
 
-    if (!carrito.has(cardId)) {
-        carrito.set(cardId, {
-            ...cardData,
+    // Usa una combinación de ID y Set para diferenciar impresiones
+    const uniqueItemId = `${cardId}-${cardData.set}`;
+
+    if (!carrito.has(uniqueItemId)) {
+        // Almacenar el nombre y el set para el carrito
+        carrito.set(uniqueItemId, {
+            id: cardId, // ID original
+            name: cardData.name,
+            set_name: cardData.set_name,
+            set: cardData.set.toUpperCase(),
+            prices: cardData.prices,
             quantity: 1
         });
     } else {
-        const item = carrito.get(cardId);
+        const item = carrito.get(uniqueItemId);
         item.quantity++;
-        carrito.set(cardId, item);
+        carrito.set(uniqueItemId, item);
     }
     
     actualizarVistaCarrito();
@@ -184,11 +239,11 @@ function agregarAlCarrito(buttonElement) {
 
 /**
  * Elimina un item del carrito
- * @param {string} cardId - El ID único de la carta a eliminar.
+ * @param {string} uniqueItemId - El ID único del item (cardId-set) a eliminar.
  */
-function eliminarDelCarrito(cardId) {
-    if (carrito.has(cardId)) {
-        carrito.delete(cardId);
+function eliminarDelCarrito(uniqueItemId) {
+    if (carrito.has(uniqueItemId)) {
+        carrito.delete(uniqueItemId);
         actualizarVistaCarrito();
     }
 }
@@ -204,8 +259,9 @@ function finalizarCompra() {
     
     // Recorre el carrito y genera un resumen
     carrito.forEach(item => {
+        // Usamos el precio en USD si está disponible
         const precio = item.prices.usd ? `$${item.prices.usd} USD` : 'Precio N/A';
-        resumen += `${item.quantity}x ${item.name} (${item.set_name}) - ${precio}\n`;
+        resumen += `${item.quantity}x ${item.name} (${item.set}) - ${precio}\n`;
         totalCartas += item.quantity;
     });
 
@@ -275,14 +331,19 @@ function actualizarVistaCarrito() {
     carritoVacioMsg.style.display = 'none';
     let totalCartas = 0;
     
-    carrito.forEach(item => {
+    // Se utiliza Array.from para poder usar .map y ordenar
+    Array.from(carrito).sort(([, a], [, b]) => a.name.localeCompare(b.name)).forEach(([uniqueItemId, item]) => {
         totalCartas += item.quantity;
         const listItem = document.createElement('div');
         listItem.className = 'flex justify-between items-center bg-gray-900 p-2 rounded-lg shadow-md border border-gray-700';
         listItem.innerHTML = `
-            <p class="truncate">${item.quantity}x ${item.name}</p>
-            <button onclick="eliminarDelCarrito('${item.id}')" 
-                class="text-red-400 hover:text-red-500 font-bold ml-2 text-sm transition duration-150">
+            <p class="truncate text-sm">
+                <span class="font-bold text-amber-300">${item.quantity}x</span> 
+                ${item.name} 
+                <span class="text-green-400">(${item.set})</span>
+            </p>
+            <button onclick="eliminarDelCarrito('${uniqueItemId}')" 
+                class="text-red-400 hover:text-red-500 font-bold ml-2 text-xs transition duration-150">
                 (Eliminar)
             </button>
         `;
