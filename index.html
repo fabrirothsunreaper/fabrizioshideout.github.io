@@ -1,0 +1,452 @@
+ 
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fabrizio's Hideout</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Estilos personalizados para el contenedor de cartas */
+        .card-container {
+            /* Fuente de Magic: The Gathering si estuviera disponible, usamos Inter por defecto */
+            font-family: 'Inter', sans-serif;
+        }
+        .card-result {
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        .card-result:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 30px rgba(234, 179, 8, 0.4); /* Sombra dorada al pasar el ratón */
+        }
+       
+        /* Estilos para cartas de doble cara */
+        .double-face-card {
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 0.6s;
+            cursor: pointer; /* Cursor de puntero solo para cartas volteables */
+            height: 450px; /* Altura fija para el flip */
+        }
+        .double-face-card.flipped {
+            transform: rotateY(180deg);
+        }
+        .face {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .back-face {
+            transform: rotateY(180deg);
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen card-container">
+
+    <div class="container mx-auto p-4 md:p-8">
+        <h1 class="text-4xl md:text-5xl font-extrabold mb-6 text-center text-amber-400">
+            Fabrizio's Hideout 🏰
+        </h1>
+
+        <!-- Contenedor de Búsqueda -->
+        <div id="busqueda-container" class="bg-gray-800 p-6 rounded-xl shadow-2xl mb-8 flex flex-col sm:flex-row items-center justify-center space-y-4 sm:space-y-0 sm:space-x-4 max-w-3xl mx-auto border-t-4 border-amber-600">
+            <input
+                type="text"
+                id="termino-busqueda"
+                placeholder="Ej: 'Plains', 'Chandra', o el nombre en español 'Gigante de Hueso'. Filtros avanzados, en inglés."
+                class="w-full sm:w-2/3 p-3 text-gray-900 bg-gray-200 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 transition duration-150"
+            >
+            <button
+                onclick="buscarCartas()"
+                class="w-full sm:w-1/3 bg-red-700 hover:bg-red-800 text-white font-bold py-3 rounded-lg shadow-md transition duration-150 transform hover:scale-105"
+            >
+                Buscar 🧙‍♂️
+            </button>
+        </div>
+       
+        <!-- Carrito de Compras -->
+        <div id="carrito-container" class="bg-gray-800 p-4 rounded-xl shadow-inner mb-8 max-w-3xl mx-auto border-2 border-green-500">
+            <h2 class="text-2xl font-bold mb-3 text-green-400 flex items-center justify-between">
+                🛒 Carrito de Cartas
+                <span id="contador-carrito" class="bg-green-600 text-white text-xs font-semibold px-2 py-1 rounded-full shadow-lg">0</span>
+            </h2>
+            <div id="lista-carrito" class="space-y-2 text-gray-300 max-h-40 overflow-y-auto pr-2">
+                <p class="text-sm italic" id="carrito-vacio-msg">El carrito está vacío. ¡Añade algunas cartas!</p>
+            </div>
+           
+            <!-- Botones de Acción: Finalizar Compra y Vaciar -->
+            <div class="mt-4 flex space-x-4">
+                <button
+                    onclick="finalizarCompra()"
+                    id="btn-comprar"
+                    class="w-2/3 bg-amber-600 hover:bg-amber-700 text-gray-900 font-extrabold py-2 rounded-lg shadow-xl transition duration-150 transform hover:scale-[1.01] opacity-50 cursor-not-allowed"
+                    disabled
+                >
+                    Finalizar Compra (📧 Email)
+                </button>
+                <button
+                    onclick="vaciarCarrito()"
+                    id="btn-vaciar"
+                    class="w-1/3 bg-red-600 hover:bg-red-700 text-white font-bold py-2 rounded-lg shadow-md transition duration-150 transform hover:scale-[1.01] opacity-50 cursor-not-allowed"
+                    disabled
+                >
+                    Vaciar
+                </button>
+            </div>
+
+        </div>
+
+        <!-- Mensajes de Estado y Error -->
+        <p id="mensaje-estado" class="text-center text-lg mb-6 text-yellow-400 font-semibold"></p>
+
+        <!-- Contenedor de Resultados -->
+        <div id="resultados" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 justify-items-center">
+            <!-- Las cartas se insertarán aquí -->
+        </div>
+    </div>
+   
+    <!-- Modal de Finalizar Compra -->
+    <div id="checkout-modal" class="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4 hidden">
+        <div class="bg-gray-800 p-8 rounded-xl shadow-3xl max-w-lg w-full border-t-4 border-amber-500">
+            <h2 class="text-3xl font-bold text-amber-400 mb-4">¡Orden Generada!</h2>
+            <p class="text-gray-300 mb-4">Tu pedido está listo. Usa el botón para enviar el resumen por correo electrónico a:</p>
+            <p class="text-lg font-mono bg-gray-900 p-3 rounded-lg text-yellow-300 mb-4 break-words select-all border border-gray-700">fabriroth.sunreaper@gmail.com</p>
+
+            <h3 class="text-xl font-semibold text-teal-400 mb-2">Resumen de tu Pedido:</h3>
+            <pre id="orden-resumen" class="bg-gray-900 p-3 rounded-lg text-sm text-gray-100 max-h-40 overflow-auto whitespace-pre-wrap select-all border border-gray-700"></pre>
+
+            <a id="btn-enviar-email" href="#" target="_blank"
+               class="inline-block text-center w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 rounded-lg transition duration-150 mt-4 shadow-xl">
+                Enviar Resumen por Email ✉️
+            </a>
+           
+            <button onclick="cerrarModalOrden()" class="mt-4 w-full bg-red-700 hover:bg-red-800 text-white font-bold py-3 rounded-lg transition duration-150 shadow-md">
+                Cerrar y Vaciar Carrito
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'https://api.scryfall.com/cards/search?q=';
+        const resultadosDiv = document.getElementById('resultados');
+        const estadoP = document.getElementById('mensaje-estado');
+        const listaCarritoDiv = document.getElementById('lista-carrito');
+        const contadorCarritoSpan = document.getElementById('contador-carrito');
+        const carritoVacioMsg = document.getElementById('carrito-vacio-msg');
+       
+        // Botones y Modal
+        const btnVaciar = document.getElementById('btn-vaciar');
+        const btnComprar = document.getElementById('btn-comprar'); // Nuevo botón de compra
+        const checkoutModal = document.getElementById('checkout-modal');
+        const ordenResumenPre = document.getElementById('orden-resumen');
+        const btnEnviarEmail = document.getElementById('btn-enviar-email'); // Nuevo elemento
+       
+        // Correo del destinatario
+        const TARGET_EMAIL = 'fabriroth.sunreaper@gmail.com';
+
+        // Almacenamiento global para el carrito
+        let carrito = new Map();
+
+        /**
+         * Realiza la búsqueda de cartas en la API de Scryfall.
+         */
+        async function buscarCartas() {
+            const termino = document.getElementById('termino-busqueda').value.trim();
+            resultadosDiv.innerHTML = ''; // Limpiar resultados anteriores
+            estadoP.textContent = ''; // Limpiar mensajes
+
+            if (!termino) {
+                estadoP.textContent = '⚠️ Por favor, introduce un término de búsqueda.';
+                return;
+            }
+
+            estadoP.textContent = '⏳ Buscando cartas...';
+
+            try {
+                // Se fuerza el filtro 'lang:es' para que la API priorice la búsqueda
+                // por nombres y textos de cartas en español.
+                const encodedTermino = encodeURIComponent(termino);
+                const finalQuery = `${encodedTermino}%20lang:es`;
+               
+                const response = await fetch(`${API_URL}${finalQuery}&unique=prints`);
+                const data = await response.json();
+
+                if (data.object === 'error') {
+                    // Si Scryfall devuelve un error explícito (casi siempre 404, No cards found)
+                    if (data.details && data.details.includes('No cards found matching')) {
+                        // Mensaje customizado para el error "No results"
+                        estadoP.textContent = '🙁 Carta no encontrada. Intenta con otro nombre o filtro.';
+                        return;
+                    } else {
+                        // Lanzar otros errores de la API (rate limit, mala sintaxis no reconocida, etc.)
+                        throw new Error(data.details || 'Error inesperado de Scryfall.');
+                    }
+                }
+
+                if (data.data && data.data.length > 0) {
+                    estadoP.textContent = `✅ Encontradas ${data.total_cards} cartas. Mostrando las primeras ${data.data.length}.`;
+                    mostrarCartas(data.data);
+                } else {
+                    // Este caso cubre un array vacío.
+                    estadoP.textContent = '🙁 Carta no encontrada. Intenta con otro nombre o filtro.';
+                }
+
+            } catch (error) {
+                console.error('Error de la API o de la red:', error);
+               
+                // Si el error es una falla de búsqueda o un error de Scryfall, mostramos el mensaje amigable.
+                if (error.message.includes('Your query didn’t match any cards') || error.message.includes('Error inesperado de Scryfall')) {
+                    estadoP.textContent = '🙁 Carta no encontrada. Intenta con otro nombre o filtro.';
+                } else {
+                    // Para errores de red genuinos o otros no relacionados con "no encontrado"
+                    estadoP.textContent = `❌ Error de conexión o red: ${error.message}`;
+                }
+            }
+        }
+
+        /**
+         * Muestra las cartas en el contenedor de resultados.
+         * @param {Array} cartas - Array de objetos de cartas de Scryfall.
+         */
+        function mostrarCartas(cartas) {
+            cartas.forEach(carta => {
+                const isDoubleFaced = carta.card_faces && carta.card_faces.length === 2;
+               
+                // Contenedor principal para la carta
+                const cardWrapper = document.createElement('div');
+                // Almacenamos los datos completos de la carta en el dataset del elemento
+                cardWrapper.dataset.cardData = JSON.stringify(carta);
+               
+                cardWrapper.className = `w-full max-w-xs bg-gray-900 rounded-xl overflow-hidden shadow-xl card-result flex flex-col justify-between border border-gray-700`;
+               
+                let cardContentHTML = '';
+
+                // Si es doble cara, configuramos el efecto flip
+                if (isDoubleFaced) {
+                    cardWrapper.classList.add('double-face-card');
+                   
+                    // Contenedor de las caras (para el efecto flip)
+                    cardContentHTML += crearCaraHTML(carta.card_faces[0], 'front-face');
+                    cardContentHTML += crearCaraHTML(carta.card_faces[1], 'back-face');
+
+                    // Al hacer clic en la carta, se voltea
+                    cardWrapper.addEventListener('click', (e) => {
+                        // Evita el flip si se hace clic en el botón Añadir al Carrito
+                        if (!e.target.closest('button')) {
+                            cardWrapper.classList.toggle('flipped');
+                        }
+                    });
+                   
+                } else {
+                    // Carta de una sola cara
+                    const imagen_uri = carta.image_uris ? carta.image_uris.normal : null;
+                   
+                    if (imagen_uri) {
+                         cardContentHTML = `
+                            <img src="${imagen_uri}" alt="Imagen de ${carta.name}" class="w-full h-auto object-cover rounded-t-xl" onerror="this.onerror=null; this.src='https://placehold.co/680x960/FFD700/000?text=Card+No+Image'">
+                            <div class="p-3 text-center">
+                                <h3 class="text-xl font-bold text-amber-300">${carta.name}</h3>
+                                <p class="text-sm text-gray-400">${carta.type_line}</p>
+                            </div>
+                        `;
+                    }
+                }
+               
+                // Botón Añadir al Carrito (añadido fuera del contenedor de caras para simplificar el click/flip)
+                const buttonHTML = `
+                    <div class="p-3">
+                        <button onclick="agregarAlCarrito(this)"
+                            data-card-id="${carta.id}"
+                            class="w-full bg-amber-600 hover:bg-amber-700 text-gray-900 font-semibold py-2 rounded-lg transition duration-150 transform hover:scale-[1.02]">
+                            + Añadir al Carrito
+                        </button>
+                    </div>
+                `;
+
+                cardWrapper.innerHTML = cardContentHTML;
+               
+                // Insertar el botón en el contenedor principal si se encontró imagen
+                if (cardContentHTML) {
+                    const buttonDiv = document.createElement('div');
+                    buttonDiv.innerHTML = buttonHTML;
+                    // El botón se añade al final del cardWrapper
+                    cardWrapper.appendChild(buttonDiv.firstElementChild);
+                   
+                    resultadosDiv.appendChild(cardWrapper);
+                }
+            });
+        }
+       
+        /**
+         * Genera el HTML para una cara de una carta (simple o doble).
+         * @param {Object} faceData - Objeto de la cara de la carta (o el objeto de la carta simple).
+         * @param {string} faceClass - Clase CSS para la cara (ej. 'front-face' o 'back-face').
+         * @returns {string} HTML de la cara.
+         */
+        function crearCaraHTML(faceData, faceClass) {
+            const imagen_uri = faceData.image_uris ? faceData.image_uris.normal : null;
+
+            if (!imagen_uri) return '';
+
+            return `
+                <div class="face ${faceClass} w-full h-full bg-gray-900 rounded-xl overflow-hidden shadow-xl" style="position: absolute;">
+                    <img src="${imagen_uri}" alt="Imagen de ${faceData.name}" class="w-full h-full object-cover rounded-xl" onerror="this.onerror=null; this.src='https://placehold.co/680x960/FFD700/000?text=Card+No+Image'">
+                    <!-- Opcional: información superpuesta -->
+                </div>
+            `;
+        }
+
+        /**
+         * Agrega una carta al carrito de compras.
+         * @param {HTMLElement} buttonElement - El botón que fue clickeado.
+         */
+        function agregarAlCarrito(buttonElement) {
+            const cardId = buttonElement.dataset.cardId;
+            // Encuentra el contenedor principal para obtener los datos completos de la carta
+            const cardWrapper = buttonElement.closest('.card-result');
+            const cardData = JSON.parse(cardWrapper.dataset.cardData);
+
+            if (!carrito.has(cardId)) {
+                // Si la carta no está en el carrito, la añadimos con cantidad 1
+                carrito.set(cardId, {
+                    ...cardData,
+                    quantity: 1
+                });
+            } else {
+                // Si ya está, incrementamos la cantidad
+                const item = carrito.get(cardId);
+                item.quantity++;
+                carrito.set(cardId, item);
+            }
+           
+            actualizarVistaCarrito();
+        }
+
+        /**
+         * Elimina un item del carrito
+         * @param {string} cardId - El ID único de la carta a eliminar.
+         */
+        function eliminarDelCarrito(cardId) {
+            if (carrito.has(cardId)) {
+                carrito.delete(cardId);
+                actualizarVistaCarrito();
+            }
+        }
+
+        /**
+         * Finaliza la compra, genera el resumen y muestra el modal.
+         */
+        function finalizarCompra() {
+            if (carrito.size === 0) return;
+
+            let resumen = "--- PEDIDO DE CARTAS MAGIC ---\n";
+            let totalCartas = 0;
+           
+            // Recorre el carrito y genera un resumen con cantidad, nombre, set y precio (si está disponible)
+            carrito.forEach(item => {
+                const precio = item.prices.usd ? `$${item.prices.usd} USD` : 'Precio N/A';
+                resumen += `${item.quantity}x ${item.name} (${item.set_name}) - ${precio}\n`;
+                totalCartas += item.quantity;
+            });
+
+            resumen += `\nTotal de items: ${totalCartas}`;
+            resumen += "\n--- FIN DEL PEDIDO ---";
+
+            // Codifica el resumen para usarlo en la URL mailto
+            const subject = encodeURIComponent(`Pedido MTG: ${totalCartas} cartas`);
+            const body = encodeURIComponent(resumen);
+            const mailtoLink = `mailto:${TARGET_EMAIL}?subject=${subject}&body=${body}`;
+
+            // Actualiza el enlace del botón de enviar email
+            btnEnviarEmail.href = mailtoLink;
+
+            mostrarModalOrden(resumen);
+        }
+
+        /**
+         * Muestra el modal de confirmación de compra con el resumen del pedido.
+         * @param {string} resumenTexto - El texto de resumen del pedido.
+         */
+        function mostrarModalOrden(resumenTexto) {
+            ordenResumenPre.textContent = resumenTexto;
+            checkoutModal.style.display = 'flex'; // Mostrar el modal
+        }
+
+        /**
+         * Cierra el modal de compra y vacía el carrito.
+         */
+        function cerrarModalOrden() {
+            checkoutModal.style.display = 'none'; // Ocultar el modal
+            vaciarCarrito();
+        }
+
+        /**
+         * Vacía completamente el carrito.
+         */
+        function vaciarCarrito() {
+            if (carrito.size > 0) {
+                carrito.clear();
+                actualizarVistaCarrito();
+            }
+        }
+
+        /**
+         * Actualiza el contenido visual del carrito y el estado de los botones.
+         */
+        function actualizarVistaCarrito() {
+            listaCarritoDiv.innerHTML = '';
+           
+            if (carrito.size === 0) {
+                carritoVacioMsg.style.display = 'block';
+                contadorCarritoSpan.textContent = 0;
+               
+                // Deshabilitar botones de compra y vaciado
+                btnVaciar.disabled = true;
+                btnVaciar.classList.add('opacity-50', 'cursor-not-allowed');
+                btnVaciar.classList.remove('hover:scale-[1.01]');
+               
+                btnComprar.disabled = true;
+                btnComprar.classList.add('opacity-50', 'cursor-not-allowed');
+                btnComprar.classList.remove('hover:scale-[1.01]');
+               
+                return;
+            }
+           
+            carritoVacioMsg.style.display = 'none';
+            let totalCartas = 0;
+           
+            carrito.forEach(item => {
+                totalCartas += item.quantity;
+                const listItem = document.createElement('div');
+                listItem.className = 'flex justify-between items-center bg-gray-900 p-2 rounded-lg shadow-md border border-gray-700';
+                listItem.innerHTML = `
+                    <p class="truncate">${item.quantity}x ${item.name}</p>
+                    <button onclick="eliminarDelCarrito('${item.id}')"
+                        class="text-red-400 hover:text-red-500 font-bold ml-2 text-sm transition duration-150">
+                        (Eliminar)
+                    </button>
+                `;
+                listaCarritoDiv.appendChild(listItem);
+            });
+           
+            contadorCarritoSpan.textContent = totalCartas;
+           
+            // Habilitar botones de compra y vaciado
+            btnVaciar.disabled = false;
+            btnVaciar.classList.remove('opacity-50', 'cursor-not-allowed');
+            btnVaciar.classList.add('hover:scale-[1.01]');
+           
+            btnComprar.disabled = false;
+            btnComprar.classList.remove('opacity-50', 'cursor-not-allowed');
+            btnComprar.classList.add('hover:scale-[1.01]');
+        }
+       
+    </script>
+
+</body>
+</html>
