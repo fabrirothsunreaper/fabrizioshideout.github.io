@@ -176,10 +176,10 @@
 
             try {
                 // Paso 1: Buscar cartas únicas que coincidan con el término. 
-                // Se usa 'lang:es' para que la búsqueda inicial acepte nombres de cartas en español.
+                // Se ha eliminado el filtro 'lang:es' para aumentar la robustez de la búsqueda inicial.
                 // Usamos `unique=cards` para obtener un representante de cada concepto (oracle_id).
                 const encodedTermino = encodeURIComponent(termino);
-                const firstSearchQuery = `${API_URL}${encodedTermino}%20lang:es&unique=cards`; 
+                const firstSearchQuery = `${API_URL}${encodedTermino}&unique=cards`; 
                 
                 const response = await fetch(firstSearchQuery);
                 const data = await response.json();
@@ -234,7 +234,7 @@
          * @param {string} cardName - El nombre de la carta (para el mensaje de estado).
          */
         async function fetchTodasLasImpresiones(oracleId, cardName) {
-            // Consulta inicial: lang:en para filtrar solo impresiones en inglés, ordenadas por lanzamiento
+            // Consulta: lang:en para filtrar solo impresiones en inglés, ordenadas por lanzamiento.
             let currentPageUrl = `https://api.scryfall.com/cards/search?q=oracleid:${oracleId}%20lang:en&order=released&unique=prints`;
             let hasMore = true;
             let allPrints = [];
@@ -293,7 +293,8 @@
 
                 if (isDoubleFaced) {
                     cardWrapper.classList.add('double-face-card');
-                    cardWrapper.style.height = '240px'; 
+                    // FIX: Altura ajustada para mejor visualización del aspect ratio (180px ancho * 1.4 = 252px alto)
+                    cardWrapper.style.height = '252px'; 
                     
                     // Contenedor de las caras (para el efecto flip)
                     cardContentHTML += crearCaraHTML(carta.card_faces[0], 'front-face', carta.id);
@@ -309,7 +310,11 @@
                     
                 } else {
                     // Carta de una sola cara
-                    const imagen_uri = carta.image_uris ? carta.image_uris.normal : null;
+                    let imagen_uri = null;
+                    if (carta.image_uris) {
+                        // FIX: Fallback de imagen para asegurar que se muestren artes especiales (large, border_crop, png)
+                        imagen_uri = carta.image_uris.normal || carta.image_uris.large || carta.image_uris.border_crop || carta.image_uris.png;
+                    }
                     
                     if (imagen_uri) {
                         cardContentHTML = `
@@ -353,7 +358,11 @@
          * @returns {string} HTML de la cara.
          */
         function crearCaraHTML(faceData, faceClass, cardId) {
-            const imageUri = faceData.image_uris ? faceData.image_uris.normal : null;
+            // Se usa el mismo fallback para las caras de cartas dobles
+            let imageUri = null;
+            if (faceData.image_uris) {
+                imageUri = faceData.image_uris.normal || faceData.image_uris.large || faceData.image_uris.border_crop || faceData.image_uris.png;
+            }
 
             if (!imageUri) return '';
 
