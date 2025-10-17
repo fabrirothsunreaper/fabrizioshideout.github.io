@@ -13,6 +13,8 @@
         }
         .card-result {
             transition: transform 0.3s, box-shadow 0.3s;
+            /* Se ha reducido el min-height aquí ya que los controles se movieron al carrito */
+            min-height: 280px; 
         }
         .card-result:hover {
             transform: translateY(-5px);
@@ -171,6 +173,7 @@
             }
         }
 
+        // --- FUNCIONES DE BÚSQUEDA ---
 
         /**
          * Realiza la búsqueda inicial de todas las cartas que coincidan con el término
@@ -191,8 +194,6 @@
 
             try {
                 // Paso 1: Buscar cartas únicas que coincidan con el término. 
-                // Se ha eliminado el filtro 'lang:es' para aumentar la robustez de la búsqueda inicial.
-                // Usamos `unique=cards` para obtener un representante de cada concepto (oracle_id).
                 const encodedTermino = encodeURIComponent(termino);
                 const firstSearchQuery = `${API_URL}${encodedTermino}&unique=cards`; 
                 
@@ -215,14 +216,12 @@
 
                     // Realizar todas las llamadas a la API de impresiones en paralelo
                     const fetchPromises = uniqueCards.map(card => {
-                        // Solo buscamos impresiones si tiene un oracle_id
                         if (card.oracle_id) {
                             return fetchTodasLasImpresiones(card.oracle_id, card.name);
                         }
                         return Promise.resolve(); 
                     });
 
-                    // Esperamos a que todas las búsquedas de impresiones terminen
                     await Promise.all(fetchPromises);
 
                     // Mensaje de resumen final
@@ -245,11 +244,8 @@
         /**
          * Busca TODAS las impresiones (prints) de una carta en idioma INGLÉS utilizando su oracle_id,
          * manejando la PAGINACIÓN para obtener más de 175 resultados.
-         * @param {string} oracleId - El ID de oráculo único de la carta.
-         * @param {string} cardName - El nombre de la carta (para el mensaje de estado).
          */
         async function fetchTodasLasImpresiones(oracleId, cardName) {
-            // Consulta: lang:en para filtrar solo impresiones en inglés, ordenadas por lanzamiento.
             let currentPageUrl = `https://api.scryfall.com/cards/search?q=oracleid:${oracleId}%20lang:en&order=released&unique=prints`;
             let hasMore = true;
             let allPrints = [];
@@ -261,7 +257,7 @@
 
                     if (data.object === 'error') {
                         console.warn(`Advertencia: Error al obtener impresiones de ${cardName} en inglés. Detalle: ${data.details}`);
-                        break; // Sale del bucle si hay un error
+                        break;
                     }
 
                     if (data.data && data.data.length > 0) {
@@ -271,7 +267,6 @@
                     hasMore = data.has_more;
                     if (hasMore && data.next_page) {
                         currentPageUrl = data.next_page;
-                        // Pausa de 50ms para respetar las políticas de la API
                         await delay(50); 
                     } else {
                         hasMore = false;
@@ -283,16 +278,16 @@
                 }
             }
             
-            // Procesa y muestra todas las impresiones recopiladas
             if (allPrints.length > 0) {
                 mostrarCartas(allPrints);
                 totalCardsDisplayed += allPrints.length;
             }
         }
 
+        // --- FUNCIONES DE RENDERIZADO DE CARTAS ---
+
         /**
          * Muestra las cartas en el contenedor de resultados.
-         * @param {Array} cartas - Array de objetos de cartas de Scryfall.
          */
         function mostrarCartas(cartas) {
             cartas.forEach(carta => {
@@ -301,30 +296,24 @@
                 const cardWrapper = document.createElement('div');
                 cardWrapper.dataset.cardData = JSON.stringify(carta); 
                 
-                // Estilos de la tarjeta, ajustados para la cuadrícula
-                cardWrapper.className = `w-full max-w-[150px] sm:max-w-[180px] bg-gray-900 rounded-xl overflow-hidden shadow-xl card-result flex flex-col justify-between border border-gray-700`;
+                cardWrapper.className = `w-full max-w-[180px] bg-gray-900 rounded-xl shadow-xl card-result flex flex-col justify-between border border-gray-700`;
                 
                 let cardContentHTML = '';
-
-                // --- 1. Determinar URL de imagen ---
                 let imagen_uri = null;
+
                 if (carta.image_uris) {
-                    // Fallback de imagen para asegurar que se muestren artes especiales
                     imagen_uri = carta.image_uris.normal || carta.image_uris.large || carta.image_uris.border_crop || carta.image_uris.png;
                 }
 
                 if (isDoubleFaced) {
                     cardWrapper.classList.add('double-face-card');
-                    cardWrapper.style.height = '252px'; 
+                    cardWrapper.style.minHeight = '320px'; // Altura para flip card
                     
-                    // Contenedor de las caras (para el efecto flip)
                     cardContentHTML += crearCaraHTML(carta.card_faces[0], 'front-face', carta.id);
                     cardContentHTML += crearCaraHTML(carta.card_faces[1], 'back-face', carta.id);
 
-                    // Manejo del evento flip
                     cardWrapper.addEventListener('click', (e) => {
-                        // Evita el flip si se hace clic en el botón Añadir al Carrito
-                        if (!e.target.closest('button, select')) { // Agregado 'select' para evitar flip al cambiar el acabado
+                        if (!e.target.closest('button')) { 
                             cardWrapper.classList.toggle('flipped');
                         }
                     });
@@ -332,43 +321,23 @@
                 } else if (imagen_uri) {
                     // Carta de una sola cara
                     cardContentHTML = `
-                        <img src="${imagen_uri}" alt="Imagen de ${carta.name}" class="w-full h-auto object-cover rounded-t-xl" onerror="this.onerror=null; this.src='https://placehold.co/680x960/FFD700/000?text=Card+No+Image'">
-                        <div class="p-2 text-center">
+                        <!-- Altura fija para la imagen (h-[252px]) -->
+                        <img src="${imagen_uri}" alt="Imagen de ${carta.name}" class="w-full h-[252px] object-cover rounded-t-xl" onerror="this.onerror=null; this.src='https://placehold.co/680x960/FFD700/000?text=Card+No+Image'">
+                        <div class="p-2 text-center flex-shrink-0">
                             <h3 class="text-sm font-bold text-amber-300 truncate">${carta.name}</h3>
                             <p class="text-xs text-gray-400">${carta.set_name} (${carta.set.toUpperCase()})</p>
                         </div>
                     `;
                 }
                 
-                // --- 2. Determinar Acabados Disponibles y generar el selector ---
-                const availableFinishes = carta.finishes || ['nonfoil'];
-
-                let optionsHTML = availableFinishes.map(finish => {
-                    const displayFinish = getDisplayFinish(finish);
-                    // Si solo hay un acabado disponible, lo seleccionamos por defecto
-                    const isSelected = availableFinishes.length === 1 && availableFinishes[0] === finish ? 'selected' : '';
-                    return `<option value="${finish}" ${isSelected}>${displayFinish}</option>`;
-                }).join('');
-
-                const finishSelectHTML = `
-                    <div class="mt-2 text-left">
-                        <label for="finish-select-${carta.id}" class="block text-xs font-medium text-gray-400 mb-1">Acabado:</label>
-                        <select id="finish-select-${carta.id}" 
-                                data-card-id="${carta.id}" 
-                                class="w-full text-gray-900 bg-gray-300 p-1 rounded text-sm focus:ring-amber-500 focus:border-amber-500">
-                            ${optionsHTML}
-                        </select>
-                    </div>
-                `;
-
-                // --- 3. Botón Añadir al Carrito ---
+                // --- Botón de Añadir (siempre añade la versión Normal) ---
                 const buttonHTML = `
-                    <div class="p-2">
-                        ${finishSelectHTML}
+                    <div class="p-2 pt-1 text-left w-full flex-shrink-0">
                         <button onclick="agregarAlCarrito(this)" 
                             data-card-id="${carta.id}" 
-                            class="w-full bg-amber-600 hover:bg-amber-700 text-gray-900 text-sm font-semibold py-1 mt-2 rounded-lg transition duration-150 transform hover:scale-[1.02]">
-                            + Añadir
+                            data-card-set="${carta.set}"
+                            class="w-full bg-green-600 hover:bg-green-700 text-white text-sm font-semibold py-1 rounded-lg transition duration-150 transform hover:scale-[1.02]">
+                            + Añadir Normal
                         </button>
                     </div>
                 `;
@@ -387,13 +356,8 @@
 
         /**
          * Genera el HTML para una cara de una carta (simple o doble).
-         * @param {Object} faceData - Objeto de la cara de la carta.
-         * @param {string} faceClass - Clase CSS para la cara.
-         * @param {string} cardId - ID de la carta padre.
-         * @returns {string} HTML de la cara.
          */
         function crearCaraHTML(faceData, faceClass, cardId) {
-            // Se usa el mismo fallback para las caras de cartas dobles
             let imageUri = null;
             if (faceData.image_uris) {
                 imageUri = faceData.image_uris.normal || faceData.image_uris.large || faceData.image_uris.border_crop || faceData.image_uris.png;
@@ -408,31 +372,31 @@
             `;
         }
 
+        // --- FUNCIONES DE CARRITO ---
+
         /**
-         * Agrega una carta al carrito de compras.
-         * @param {HTMLElement} buttonElement - El botón que fue clickeado.
+         * Agrega una carta al carrito de compras (siempre en Normal por defecto).
          */
         function agregarAlCarrito(buttonElement) {
             const cardId = buttonElement.dataset.cardId;
             const cardWrapper = buttonElement.closest('.card-result');
             const cardData = JSON.parse(cardWrapper.dataset.cardData);
-
-            // Obtener el acabado seleccionado del dropdown asociado a la carta
-            const finishSelect = cardWrapper.querySelector(`#finish-select-${cardId}`);
-            const selectedFinish = finishSelect ? finishSelect.value : (cardData.finishes && cardData.finishes[0] || 'nonfoil');
             
-            // Usa Card ID, Set code, y Finish para crear un identificador único
-            const uniqueItemId = `${cardId}-${cardData.set}-${selectedFinish}`; 
+            // Siempre añadimos la versión Normal por defecto.
+            const resolvedFinish = 'nonfoil'; 
+            
+            // Usa Card ID, Set code, y el acabado RESUELTO para crear un identificador único
+            const uniqueItemId = `${cardId}-${cardData.set}-${resolvedFinish}`; 
 
             if (!carrito.has(uniqueItemId)) {
-                // Almacenar el nombre, set y finish para el carrito
                 carrito.set(uniqueItemId, {
                     id: cardId, 
                     name: cardData.name,
                     set_name: cardData.set_name,
                     set: cardData.set.toUpperCase(),
                     prices: cardData.prices,
-                    finish: selectedFinish, // Almacena el acabado seleccionado
+                    finish: resolvedFinish, // Almacena el acabado resuelto
+                    finishes: cardData.finishes || ['nonfoil'], // Guarda todos los acabados disponibles para la selección futura
                     quantity: 1
                 });
             } else {
@@ -445,8 +409,75 @@
         }
 
         /**
+         * Resuelve y cambia el acabado de un artículo en el carrito.
+         * Se llama desde el selector de acabado en el carrito.
+         * @param {string} oldUniqueItemId - El ID único anterior (cardId-set-oldFinish).
+         * @param {string} newFinishPref - La nueva preferencia de acabado seleccionada ('nonfoil', 'foil_preference', o 'foil_only').
+         */
+        function cambiarAcabadoCarrito(oldUniqueItemId, newFinishPref) {
+            const oldItem = carrito.get(oldUniqueItemId);
+            if (!oldItem) return;
+
+            let resolvedFinish = oldItem.finish; // Mantener si no cambia
+            const finishes = oldItem.finishes;
+            const hasFoil = finishes.includes('foil') || finishes.includes('etched');
+
+            // --- Lógica de Resolución ---
+            if (newFinishPref === 'nonfoil') {
+                resolvedFinish = 'nonfoil';
+
+            } else if (newFinishPref === 'foil_preference') {
+                // Intenta Foil/Etched, sino cae en Normal
+                if (finishes.includes('foil')) {
+                    resolvedFinish = 'foil'; 
+                } else if (finishes.includes('etched')) {
+                    resolvedFinish = 'etched'; 
+                } else {
+                    resolvedFinish = 'nonfoil';
+                }
+            } else if (newFinishPref === 'foil_only') {
+                // Intenta Foil/Etched. Si NO hay, ELIMINA la carta.
+                if (finishes.includes('foil')) {
+                    resolvedFinish = 'foil';
+                } else if (finishes.includes('etched')) {
+                    resolvedFinish = 'etched';
+                } else {
+                    // Si el usuario exige Solo Foil y no está disponible, eliminamos el ítem del carrito
+                    carrito.delete(oldUniqueItemId);
+                    actualizarVistaCarrito();
+                    return; // Terminamos la ejecución
+                }
+            } 
+            
+            // Si el acabado resuelto no ha cambiado, no hacemos nada más.
+            if (resolvedFinish === oldItem.finish) return;
+
+            // 1. Crear el nuevo ID único
+            const newUniqueItemId = `${oldItem.id}-${oldItem.set}-${resolvedFinish}`;
+
+            // 2. Transferir cantidad al nuevo artículo o fusionar
+            const newQuantity = oldItem.quantity;
+            
+            if (carrito.has(newUniqueItemId)) {
+                // Si ya existe el nuevo acabado, fusionamos las cantidades
+                const existingItem = carrito.get(newUniqueItemId);
+                existingItem.quantity += newQuantity;
+                carrito.set(newUniqueItemId, existingItem);
+            } else {
+                // Crear nuevo objeto con el acabado resuelto
+                const newItem = { ...oldItem, finish: resolvedFinish, uniqueItemId: newUniqueItemId, quantity: newQuantity };
+                carrito.set(newUniqueItemId, newItem);
+            }
+
+            // 3. Eliminar el artículo antiguo
+            carrito.delete(oldUniqueItemId);
+
+            actualizarVistaCarrito();
+        }
+
+
+        /**
          * Elimina un item del carrito
-         * @param {string} uniqueItemId - El ID único del item (cardId-set-finish) a eliminar.
          */
         function eliminarDelCarrito(uniqueItemId) {
             if (carrito.has(uniqueItemId)) {
@@ -464,11 +495,9 @@
             let resumen = "--- PEDIDO DE CARTAS MAGIC ---\n";
             let totalCartas = 0;
             
-            // Recorre el carrito y genera un resumen
             carrito.forEach(item => {
-                // Usamos el precio en USD si está disponible
                 const precio = item.prices.usd ? `$${item.prices.usd} USD` : 'Precio N/A';
-                const finishDisplay = getDisplayFinish(item.finish); // Obtiene el nombre del acabado
+                const finishDisplay = getDisplayFinish(item.finish); 
                 resumen += `${item.quantity}x ${item.name} (${item.set}) [${finishDisplay}] - ${precio}\n`;
                 totalCartas += item.quantity;
             });
@@ -476,12 +505,10 @@
             resumen += `\nTotal de items: ${totalCartas}`;
             resumen += "\n--- FIN DEL PEDIDO ---";
 
-            // Codifica el resumen para el enlace mailto
             const subject = encodeURIComponent(`Pedido MTG: ${totalCartas} cartas`);
             const body = encodeURIComponent(resumen);
             const mailtoLink = `mailto:${TARGET_EMAIL}?subject=${subject}&body=${body}`;
 
-            // Actualiza el enlace del botón de enviar email
             btnEnviarEmail.href = mailtoLink;
 
             mostrarModalOrden(resumen);
@@ -489,7 +516,6 @@
 
         /**
          * Muestra el modal de confirmación de compra con el resumen del pedido.
-         * @param {string} resumenTexto - El texto de resumen del pedido.
          */
         function mostrarModalOrden(resumenTexto) {
             ordenResumenPre.textContent = resumenTexto;
@@ -513,6 +539,38 @@
                 actualizarVistaCarrito();
             }
         }
+
+        /**
+         * Genera las opciones de acabado para el selector del carrito, incluyendo "Solo Foil".
+         */
+        function generarOpcionesAcabado(item) {
+            const finishes = item.finishes;
+            const hasFoilOption = finishes.includes('foil') || finishes.includes('etched');
+            let options = '';
+            let selectedPref = 'nonfoil'; // Opción por defecto
+            
+            // Determinar qué preferencia debería estar seleccionada actualmente
+            if (item.finish === 'foil' || item.finish === 'etched') {
+                // Si la carta actual es foil/etched, debe seleccionarse la preferencia foil. 
+                // Usaremos 'foil_preference' si está disponible, o 'foil_only' si el usuario sólo tiene esa opción.
+                selectedPref = 'foil_preference';
+            }
+
+            // Opción 1: Normal (nonfoil)
+            options += `<option value="nonfoil" ${item.finish === 'nonfoil' ? 'selected' : ''}>Normal</option>`;
+
+            if (hasFoilOption) {
+                // Opción 2: Foil (si es posible) - preferencia genérica
+                // Se selecciona si el acabado actual es foil/etched, asumiendo que es la preferencia más común.
+                options += `<option value="foil_preference" ${selectedPref === 'foil_preference' && (item.finish === 'foil' || item.finish === 'etched') ? 'selected' : ''}>Foil (si es posible)</option>`;
+
+                // Opción 3: Solo Foil (exige acabado)
+                options += `<option value="foil_only" ${selectedPref === 'foil_only' && (item.finish === 'foil' || item.finish === 'etched') ? 'selected' : ''}>Solo Foil</option>`;
+            } 
+            
+            return options;
+        }
+
 
         /**
          * Actualiza el contenido visual del carrito y el estado de los botones.
@@ -539,23 +597,35 @@
             carritoVacioMsg.style.display = 'none';
             let totalCartas = 0;
             
-            // Se utiliza Array.from para poder usar .map y ordenar
             Array.from(carrito).sort(([, a], [, b]) => a.name.localeCompare(b.name)).forEach(([uniqueItemId, item]) => {
                 totalCartas += item.quantity;
-                const finishDisplay = getDisplayFinish(item.finish); // Obtiene el nombre del acabado
+                const finishOptionsHTML = generarOpcionesAcabado(item);
                 
                 const listItem = document.createElement('div');
-                listItem.className = 'flex justify-between items-center bg-gray-900 p-2 rounded-lg shadow-md border border-gray-700';
+                listItem.className = 'flex flex-col sm:flex-row justify-between items-start sm:items-center bg-gray-900 p-2 rounded-lg shadow-md border border-gray-700 space-y-2 sm:space-y-0';
+                
                 listItem.innerHTML = `
-                    <p class="truncate text-sm">
-                        <span class="font-bold text-amber-300">${item.quantity}x</span> 
-                        ${item.name} 
-                        <span class="text-green-400">(${item.set})</span>
-                        <span class="text-yellow-300 ml-1 font-medium">(${finishDisplay})</span>
-                    </p>
+                    <div class="flex-1 w-full sm:w-auto flex flex-col sm:flex-row items-start sm:items-center">
+                        <!-- Nombre y Cantidad -->
+                        <p class="truncate text-sm font-semibold mr-4">
+                            <span class="font-bold text-amber-300">${item.quantity}x</span> 
+                            ${item.name} 
+                            <span class="text-green-400 font-normal ml-1">(${item.set})</span>
+                        </p>
+                        
+                        <!-- Selector de Acabado -->
+                        <select 
+                            onchange="cambiarAcabadoCarrito('${uniqueItemId}', this.value)"
+                            class="text-xs bg-gray-700 border border-gray-600 text-white rounded p-1 focus:ring-amber-500 focus:border-amber-500 w-full sm:w-auto mt-1 sm:mt-0"
+                        >
+                            ${finishOptionsHTML}
+                        </select>
+                    </div>
+                    
+                    <!-- Botón de Eliminar -->
                     <button onclick="eliminarDelCarrito('${uniqueItemId}')" 
-                        class="text-red-400 hover:text-red-500 font-bold ml-2 text-xs transition duration-150">
-                        (Eliminar)
+                        class="text-red-400 hover:text-red-500 font-bold text-xs transition duration-150 flex-shrink-0 mt-1 sm:mt-0">
+                        Eliminar
                     </button>
                 `;
                 listaCarritoDiv.appendChild(listItem);
