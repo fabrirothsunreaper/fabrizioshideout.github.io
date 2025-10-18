@@ -4,13 +4,50 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fabrizio's Hideout</title>
-    <!-- Carga de Tailwind CSS para estilos -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Carga de Tailwind CSS para estilos --><script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts para la nueva fuente condensada -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Teko:wght@500;700&display=swap" rel="stylesheet">
+    
     <style>
+        /* Estilos para el fondo dinámico */
+        body {
+            background-color: #0a0a0a; /* Fondo muy oscuro por defecto */
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-attachment: fixed; /* Mantiene el fondo fijo al hacer scroll */
+            transition: background-image 1s ease-in-out; /* Transición suave al cambiar de imagen */
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        /* Capa de superposición oscura para mantener la legibilidad */
+        body::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.75); /* Oscurece el fondo */
+            z-index: -1; /* Asegura que esté detrás del contenido */
+        }
+
         /* Estilos personalizados para el contenedor de cartas */
         .card-container {
             font-family: 'Inter', sans-serif; 
         }
+        /* Fuente tipo Runic/Condensed para el título */
+        .ff-title {
+            font-family: 'Teko', sans-serif; /* CAMBIADO a Teko para un estilo condensado */
+            font-weight: 700; /* Asegura que sea fuerte */
+            text-shadow: 
+                0 0 5px rgba(255, 215, 0, 0.5), /* Resplandor dorado tenue */
+                0 0 10px rgba(255, 215, 0, 0.3);
+        }
+
         .card-result {
             transition: transform 0.3s, box-shadow 0.3s;
             min-height: 280px; 
@@ -48,13 +85,11 @@
 </head>
 <body class="bg-gray-900 text-white min-h-screen card-container">
 
-    <div class="container mx-auto p-4 md:p-8">
-        <h1 class="text-4xl md:text-5xl font-extrabold mb-6 text-center text-amber-400">
+    <div class="container mx-auto p-4 md:p-8 relative z-10"> <!-- Contenido en capa superior --><h1 class="text-4xl md:text-5xl font-extrabold mb-6 text-center text-amber-400 ff-title">
             Fabrizio's Hideout 
         </h1>
 
-        <!-- Contenedor de Búsqueda -->
-        <div id="busqueda-container" class="bg-gray-800 p-6 rounded-xl shadow-2xl mb-8 flex flex-col sm:flex-row items-center justify-center space-y-4 sm:space-y-0 sm:space-x-4 max-w-3xl mx-auto border-t-4 border-amber-600">
+        <!-- Contenedor de Búsqueda --><div id="busqueda-container" class="bg-gray-800 p-6 rounded-xl shadow-2xl mb-8 flex flex-col sm:flex-row items-center justify-center space-y-4 sm:space-y-0 sm:space-x-4 max-w-3xl mx-auto border-t-4 border-amber-600">
             <input 
                 type="text" 
                 id="termino-busqueda" 
@@ -69,8 +104,7 @@
             </button>
         </div>
         
-        <!-- Carrito de Compras -->
-        <div id="carrito-container" class="bg-gray-800 p-4 rounded-xl shadow-inner mb-8 max-w-3xl mx-auto border-2 border-green-500">
+        <!-- Carrito de Compras --><div id="carrito-container" class="bg-gray-800 p-4 rounded-xl shadow-inner mb-8 max-w-3xl mx-auto border-2 border-green-500">
             <h2 class="text-2xl font-bold mb-3 text-green-400 flex items-center justify-between">
                 Carrito de Cartas
                 <span id="contador-carrito" class="bg-green-600 text-white text-xs font-semibold px-2 py-1 rounded-full shadow-lg">0</span>
@@ -79,8 +113,7 @@
                 <p class="text-sm italic" id="carrito-vacio-msg">El carrito está vacío. ¡Añade algunas cartas!</p>
             </div>
             
-            <!-- Botones de Acción: Finalizar Compra y Vaciar -->
-            <div class="mt-4 flex space-x-4">
+            <!-- Botones de Acción: Finalizar Compra y Vaciar --><div class="mt-4 flex space-x-4">
                 <button 
                     onclick="finalizarCompra()" 
                     id="btn-comprar"
@@ -101,25 +134,20 @@
 
         </div>
 
-        <!-- Mensajes de Estado y Error -->
-        <p id="mensaje-estado" class="text-center text-lg mb-6 text-yellow-400 font-semibold"></p>
+        <!-- Mensajes de Estado y Error --><p id="mensaje-estado" class="text-center text-lg mb-6 text-yellow-400 font-semibold"></p>
 
-        <!-- Contenedor de Resultados -->
-        <div id="resultados" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 justify-items-center">
-            <!-- Las cartas se insertarán aquí -->
-        </div>
+        <!-- Contenedor de Resultados --><div id="resultados" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 justify-items-center">
+            <!-- Las cartas se insertarán aquí --></div>
     </div>
     
-    <!-- Modal de Finalizar Compra -->
-    <div id="checkout-modal" class="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4 hidden">
+    <!-- Modal de Finalizar Compra --><div id="checkout-modal" class="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4 hidden">
         <div class="bg-gray-800 p-8 rounded-xl shadow-3xl max-w-lg w-full border-t-4 border-amber-500">
             <h2 class="text-3xl font-bold text-amber-400 mb-4">¡Orden Generada!</h2>
             <p class="text-gray-300 mb-4">Tu pedido está listo. Usa el botón para enviar el resumen por correo electrónico a:</p>
             <p class="text-lg font-mono bg-gray-900 p-3 rounded-lg text-yellow-300 mb-4 break-words select-all border border-gray-700">fabriroth.sunreaper@gmail.com</p>
             
             <h3 class="text-xl font-semibold text-teal-400 mb-2">Resumen de tu Pedido:</h3>
-            <!-- El contenido de este PRE se usa para copiar y para el mailto -->
-            <pre id="orden-resumen" class="bg-gray-900 p-3 rounded-lg text-sm text-gray-100 max-h-40 overflow-auto whitespace-pre-wrap select-all border border-gray-700"></pre>
+            <!-- El contenido de este PRE se usa para copiar y para el mailto --><pre id="orden-resumen" class="bg-gray-900 p-3 rounded-lg text-sm text-gray-100 max-h-40 overflow-auto whitespace-pre-wrap select-all border border-gray-700"></pre>
 
             <div class="flex space-x-4 mt-4">
                 <a id="btn-enviar-email" href="#" target="_blank"
@@ -130,12 +158,11 @@
                 <button onclick="copiarResumen()" 
                     id="btn-copiar-resumen"
                     class="w-1/3 bg-yellow-600 hover:bg-yellow-700 text-gray-900 font-bold py-3 rounded-lg transition duration-150 shadow-md flex items-center justify-center">
-                    <!-- Icono de Copiar (SVG simple) -->
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                    <!-- Icono de Copiar (SVG simple) --><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
                         <path d="M7 9a2 2 0 012-2h6a2 2 0 012 2v6a2 2 0 01-2 2H9a2 2 0 01-2-2V9z" />
                         <path d="M5 3a2 2 0 00-2 2v6a2 2 0 002 2h2V5a2 2 0 012-2h6a2 2 0 00-2-2H5z" />
                     </svg>
-                    Copiar
+                    Copiar CSV
                 </button>
             </div>
             
@@ -145,13 +172,11 @@
         </div>
     </div>
     
-    <!-- Notificación de Copia (Nuevo Elemento) -->
-    <div id="copy-notification" class="fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-xl transform translate-y-full transition-transform duration-300 z-50">
+    <!-- Notificación de Copia (Nuevo Elemento) --><div id="copy-notification" class="fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-xl transform translate-y-full transition-transform duration-300 z-50">
         ¡Lista copiada al portapapeles!
     </div>
 
-    <!-- Script de JavaScript (Lógica de la aplicación) -->
-    <script>
+    <!-- Script de JavaScript (Lógica de la aplicación) --><script>
         // --- CONSTANTES Y REFERENCIAS GLOBALES ---
         const API_URL = 'https://api.scryfall.com/cards/search?q=';
         const TARGET_EMAIL = 'fabriroth.sunreaper@gmail.com'; 
@@ -165,9 +190,9 @@
         const btnVaciar = document.getElementById('btn-vaciar');
         const btnComprar = document.getElementById('btn-comprar');
         const checkoutModal = document.getElementById('checkout-modal');
-        const ordenResumenPre = document.getElementById('orden-resumen'); // Vuelve a usarse
+        const ordenResumenPre = document.getElementById('orden-resumen'); 
         const btnEnviarEmail = document.getElementById('btn-enviar-email');
-        const copyNotification = document.getElementById('copy-notification'); // Nuevo
+        const copyNotification = document.getElementById('copy-notification'); 
 
         // Almacenamiento global para el carrito: Map<uniqueItemId, itemObject>
         let carrito = new Map(); 
@@ -501,14 +526,14 @@
         }
 
         /**
-         * Genera el resumen del pedido como una cadena de texto.
+         * Genera el resumen del pedido como una cadena de texto (formato legible para email).
          */
         function generarResumenPedido() {
             let resumen = "--- PEDIDO DE CARTAS MAGIC ---\n";
             let totalCartas = 0;
             
             carrito.forEach(item => {
-                const precio = item.prices.usd ? `$${item.prices.usd} USD` : 'Precio N/A';
+                const precio = item.prices.usd ? `$${item.prices.usd} USD (TCGPlayer)` : 'Precio N/A';
                 const finishDisplay = getDisplayFinish(item.finish); 
                 
                 // INCLUYE EL NÚMERO DE COLECCIONISTA
@@ -520,6 +545,27 @@
             resumen += "\n--- FIN DEL PEDIDO ---";
             
             return { resumen, totalCartas };
+        }
+
+        /**
+         * Genera el resumen del pedido en formato CSV (Comma Separated Values) para hojas de cálculo.
+         * Nota: Los precios son de TCGPlayer (USD), ya que Card Kingdom no está disponible vía Scryfall.
+         */
+        function generarResumenCSV() {
+            // Cabecera CSV
+            let csv = "Cantidad,Nombre,Set Code,Num.Coleccionista,Acabado,Precio TCGPlayer (USD)\n";
+            
+            carrito.forEach(item => {
+                const precioUSD = item.prices.usd || 'N/A';
+                const finishDisplay = getDisplayFinish(item.finish); 
+                
+                // Escapa comas en el nombre
+                const escapedName = `"${item.name.replace(/"/g, '""')}"`;
+
+                csv += `${item.quantity},${escapedName},${item.set},${item.collector_number},${finishDisplay},${precioUSD}\n`;
+            });
+
+            return csv;
         }
 
         /**
@@ -542,10 +588,10 @@
         }
         
         /**
-         * COPIA el resumen del pedido al portapapeles.
+         * COPIA el resumen del pedido al portapapeles en formato CSV.
          */
         function copiarResumen() {
-            const resumenTexto = ordenResumenPre.textContent;
+            const resumenTexto = generarResumenCSV(); // Usa el nuevo formato CSV para la copia
             
             // Usa execCommand('copy') como fallback para entornos iframe
             try {
@@ -560,7 +606,7 @@
                 document.execCommand('copy');
                 document.body.removeChild(tempTextArea);
                 
-                showNotification('¡Lista copiada al portapapeles!');
+                showNotification('¡Lista CSV copiada para hoja de cálculo!');
             } catch (err) {
                 console.error('No se pudo copiar el texto: ', err);
                 showNotification('Error al copiar. Intenta copiar manualmente.');
@@ -649,15 +695,12 @@
                 
                 listItem.innerHTML = `
                     <div class="flex-1 w-full sm:w-auto flex flex-col sm:flex-row items-start sm:items-center">
-                        <!-- Nombre y Cantidad -->
-                        <p class="truncate text-sm font-semibold mr-4">
+                        <!-- Nombre y Cantidad --><p class="truncate text-sm font-semibold mr-4">
                             <span class="font-bold text-amber-300">${item.quantity}x</span> 
                             ${item.name} 
-                            <span class="text-green-400 font-normal ml-1">(${item.set} #${item.collector_number})</span> <!-- Número de Coleccionista Agregado -->
-                        </p>
+                            <span class="text-green-400 font-normal ml-1">(${item.set} #${item.collector_number})</span> <!-- Número de Coleccionista Agregado --></p>
                         
-                        <!-- Selector de Acabado -->
-                        <select 
+                        <!-- Selector de Acabado --><select 
                             onchange="cambiarAcabadoCarrito('${uniqueItemId}', this.value)"
                             class="text-xs bg-gray-700 border border-gray-600 text-white rounded p-1 focus:ring-amber-500 focus:border-amber-500 w-full sm:w-auto mt-1 sm:mt-0"
                         >
@@ -665,8 +708,7 @@
                         </select>
                     </div>
                     
-                    <!-- Botón de Eliminar -->
-                    <button onclick="eliminarDelCarrito('${uniqueItemId}')" 
+                    <!-- Botón de Eliminar --><button onclick="eliminarDelCarrito('${uniqueItemId}')" 
                         class="text-red-400 hover:text-red-500 font-bold text-xs transition duration-150 flex-shrink-0 mt-1 sm:mt-0">
                         Eliminar
                     </button>
@@ -685,6 +727,31 @@
             btnComprar.classList.remove('opacity-50', 'cursor-not-allowed');
             btnComprar.classList.add('hover:scale-[1.01]');
         }
+
+        // --- INICIALIZACIÓN (Carga el fondo al cargar la página) ---
+        async function cargarFondoAleatorio() {
+            try {
+                // Buscar una carta promocional con arte completo y que no sea token/básica
+                const response = await fetch('https://api.scryfall.com/cards/random?q=is%3Apromo+has%3Aborder_crop+-type%3Atoken+-type%3Abasic');
+                const data = await response.json();
+
+                if (data && data.image_uris && data.image_uris.art_crop) {
+                    document.body.style.backgroundImage = `url('${data.image_uris.art_crop}')`;
+                } else {
+                    console.warn('No se pudo encontrar un art_crop para el fondo aleatorio.');
+                    // Fallback a una imagen genérica si no se encuentra
+                    document.body.style.backgroundImage = `url('https://c4.wallpaperflare.com/wallpaper/137/954/535/magic-the-gathering-fantasy-art-digital-art-trading-card-game-wallpaper-preview.jpg')`;
+                }
+            } catch (error) {
+                console.error('Error al cargar la imagen de fondo aleatoria:', error);
+                // Fallback en caso de error de red/API
+                document.body.style.backgroundImage = `url('https://c4.wallpaperflare.com/wallpaper/137/954/535/magic-the-gathering-fantasy-art-digital-art-trading-card-game-wallpaper-preview.jpg')`;
+            }
+        }
+
+        // Llama a la función al cargar la página
+        window.onload = cargarFondoAleatorio;
+
     </script> 
 
 </body>
