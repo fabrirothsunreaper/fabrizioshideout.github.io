@@ -13,7 +13,6 @@
         }
         .card-result {
             transition: transform 0.3s, box-shadow 0.3s;
-            /* Se ha reducido el min-height aquí ya que los controles se movieron al carrito */
             min-height: 280px; 
         }
         .card-result:hover {
@@ -88,7 +87,7 @@
                     class="w-2/3 bg-amber-600 hover:bg-amber-700 text-gray-900 font-extrabold py-2 rounded-lg shadow-xl transition duration-150 transform hover:scale-[1.01] opacity-50 cursor-not-allowed"
                     disabled
                 >
-                    Finalizar Compra ( Email)
+                    Finalizar Compra (Email)
                 </button>
                 <button 
                     onclick="vaciarCarrito()" 
@@ -117,52 +116,70 @@
             <h2 class="text-3xl font-bold text-amber-400 mb-4">¡Orden Generada!</h2>
             <p class="text-gray-300 mb-4">Tu pedido está listo. Usa el botón para enviar el resumen por correo electrónico a:</p>
             <p class="text-lg font-mono bg-gray-900 p-3 rounded-lg text-yellow-300 mb-4 break-words select-all border border-gray-700">fabriroth.sunreaper@gmail.com</p>
-
+            
             <h3 class="text-xl font-semibold text-teal-400 mb-2">Resumen de tu Pedido:</h3>
+            <!-- El contenido de este PRE se usa para copiar y para el mailto -->
             <pre id="orden-resumen" class="bg-gray-900 p-3 rounded-lg text-sm text-gray-100 max-h-40 overflow-auto whitespace-pre-wrap select-all border border-gray-700"></pre>
 
-            <a id="btn-enviar-email" href="#" target="_blank"
-               class="inline-block text-center w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 rounded-lg transition duration-150 mt-4 shadow-xl">
-                Enviar Resumen por Email 
-            </a>
+            <div class="flex space-x-4 mt-4">
+                <a id="btn-enviar-email" href="#" target="_blank"
+                class="inline-block text-center w-2/3 bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 rounded-lg transition duration-150 shadow-xl">
+                    Enviar Resumen por Email 
+                </a>
+                
+                <button onclick="copiarResumen()" 
+                    id="btn-copiar-resumen"
+                    class="w-1/3 bg-yellow-600 hover:bg-yellow-700 text-gray-900 font-bold py-3 rounded-lg transition duration-150 shadow-md flex items-center justify-center">
+                    <!-- Icono de Copiar (SVG simple) -->
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M7 9a2 2 0 012-2h6a2 2 0 012 2v6a2 2 0 01-2 2H9a2 2 0 01-2-2V9z" />
+                        <path d="M5 3a2 2 0 00-2 2v6a2 2 0 002 2h2V5a2 2 0 012-2h6a2 2 0 00-2-2H5z" />
+                    </svg>
+                    Copiar
+                </button>
+            </div>
             
             <button onclick="cerrarModalOrden()" class="mt-4 w-full bg-red-700 hover:bg-red-800 text-white font-bold py-3 rounded-lg transition duration-150 shadow-md">
                 Cerrar y Vaciar Carrito
             </button>
         </div>
     </div>
+    
+    <!-- Notificación de Copia (Nuevo Elemento) -->
+    <div id="copy-notification" class="fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-xl transform translate-y-full transition-transform duration-300 z-50">
+        ¡Lista copiada al portapapeles!
+    </div>
 
     <!-- Script de JavaScript (Lógica de la aplicación) -->
     <script>
-        // --- CONSTANTES Y REFERENCIAS DEL DOM ---
+        // --- CONSTANTES Y REFERENCIAS GLOBALES ---
         const API_URL = 'https://api.scryfall.com/cards/search?q=';
+        const TARGET_EMAIL = 'fabriroth.sunreaper@gmail.com'; 
+
+        // --- REFERENCIAS DEL DOM ---
         const resultadosDiv = document.getElementById('resultados');
         const estadoP = document.getElementById('mensaje-estado');
         const listaCarritoDiv = document.getElementById('lista-carrito');
         const contadorCarritoSpan = document.getElementById('contador-carrito');
         const carritoVacioMsg = document.getElementById('carrito-vacio-msg');
-
-        // Botones y Modal
         const btnVaciar = document.getElementById('btn-vaciar');
         const btnComprar = document.getElementById('btn-comprar');
         const checkoutModal = document.getElementById('checkout-modal');
-        const ordenResumenPre = document.getElementById('orden-resumen');
+        const ordenResumenPre = document.getElementById('orden-resumen'); // Vuelve a usarse
         const btnEnviarEmail = document.getElementById('btn-enviar-email');
-
-        // Correo del destinatario (Fabrizio)
-        const TARGET_EMAIL = 'fabriroth.sunreaper@gmail.com'; 
+        const copyNotification = document.getElementById('copy-notification'); // Nuevo
 
         // Almacenamiento global para el carrito: Map<uniqueItemId, itemObject>
         let carrito = new Map(); 
-        let totalCardsDisplayed = 0; // Contador para llevar la cuenta de todas las impresiones mostradas
-
+        let totalCardsDisplayed = 0; 
+        
         // Función auxiliar para un pequeño retardo entre llamadas (buena práctica para la API de Scryfall)
         const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
+        // --- FUNCIONES DE UTILIDAD ---
+
         /**
          * Traduce el nombre del acabado de la carta a español para mostrar en la UI.
-         * @param {string} finish - El nombre del acabado (ej: 'nonfoil', 'foil', 'etched').
-         * @returns {string} El nombre a mostrar.
          */
         function getDisplayFinish(finish) {
             switch (finish) {
@@ -173,6 +190,19 @@
             }
         }
 
+        /**
+         * Muestra una notificación temporal.
+         */
+        function showNotification(message) {
+            copyNotification.textContent = message;
+            copyNotification.classList.remove('translate-y-full');
+            copyNotification.classList.add('translate-y-0');
+            setTimeout(() => {
+                copyNotification.classList.remove('translate-y-0');
+                copyNotification.classList.add('translate-y-full');
+            }, 3000);
+        }
+
         // --- FUNCIONES DE BÚSQUEDA ---
 
         /**
@@ -181,9 +211,9 @@
          */
         async function buscarCartas() {
             const termino = document.getElementById('termino-busqueda').value.trim();
-            resultadosDiv.innerHTML = ''; // Limpiar resultados anteriores
-            estadoP.textContent = ''; // Limpiar mensajes
-            totalCardsDisplayed = 0; // Resetear contador
+            resultadosDiv.innerHTML = ''; 
+            estadoP.textContent = ''; 
+            totalCardsDisplayed = 0; 
 
             if (!termino) {
                 estadoP.textContent = ' Por favor, introduce un término de búsqueda.';
@@ -210,11 +240,10 @@
                 }
 
                 if (data.data && data.data.length > 0) {
-                    const uniqueCards = data.data; // Cartas únicas por concepto
+                    const uniqueCards = data.data; 
                     
                     estadoP.textContent = `Encontradas ${uniqueCards.length} cartas únicas. Buscando solo impresiones en inglés... (puede tardar si hay muchas variantes)`;
 
-                    // Realizar todas las llamadas a la API de impresiones en paralelo
                     const fetchPromises = uniqueCards.map(card => {
                         if (card.oracle_id) {
                             return fetchTodasLasImpresiones(card.oracle_id, card.name);
@@ -224,7 +253,6 @@
 
                     await Promise.all(fetchPromises);
 
-                    // Mensaje de resumen final
                     if (totalCardsDisplayed > 0) {
                         estadoP.textContent = `✅ Búsqueda completa. Se encontraron y mostraron ${totalCardsDisplayed} impresiones en inglés de ${uniqueCards.length} cartas únicas.`;
                     } else {
@@ -302,6 +330,7 @@
                 let imagen_uri = null;
 
                 if (carta.image_uris) {
+                    // Fallback de imágenes: normal, large, border_crop, png
                     imagen_uri = carta.image_uris.normal || carta.image_uris.large || carta.image_uris.border_crop || carta.image_uris.png;
                 }
 
@@ -321,7 +350,6 @@
                 } else if (imagen_uri) {
                     // Carta de una sola cara
                     cardContentHTML = `
-                        <!-- Altura fija para la imagen (h-[252px]) -->
                         <img src="${imagen_uri}" alt="Imagen de ${carta.name}" class="w-full h-[252px] object-cover rounded-t-xl" onerror="this.onerror=null; this.src='https://placehold.co/680x960/FFD700/000?text=Card+No+Image'">
                         <div class="p-2 text-center flex-shrink-0">
                             <h3 class="text-sm font-bold text-amber-300 truncate">${carta.name}</h3>
@@ -411,8 +439,6 @@
         /**
          * Resuelve y cambia el acabado de un artículo en el carrito.
          * Se llama desde el selector de acabado en el carrito.
-         * @param {string} oldUniqueItemId - El ID único anterior (cardId-set-oldFinish).
-         * @param {string} newFinishPref - La nueva preferencia de acabado seleccionada ('nonfoil', 'foil_preference', o 'foil_only').
          */
         function cambiarAcabadoCarrito(oldUniqueItemId, newFinishPref) {
             const oldItem = carrito.get(oldUniqueItemId);
@@ -420,9 +446,8 @@
 
             let resolvedFinish = oldItem.finish; // Mantener si no cambia
             const finishes = oldItem.finishes;
-            const hasFoil = finishes.includes('foil') || finishes.includes('etched');
 
-            // --- Lógica de Resolución ---
+            // --- Lógica de Resolución (solo Normal o Foil Preferencia) ---
             if (newFinishPref === 'nonfoil') {
                 resolvedFinish = 'nonfoil';
 
@@ -433,19 +458,7 @@
                 } else if (finishes.includes('etched')) {
                     resolvedFinish = 'etched'; 
                 } else {
-                    resolvedFinish = 'nonfoil';
-                }
-            } else if (newFinishPref === 'foil_only') {
-                // Intenta Foil/Etched. Si NO hay, ELIMINA la carta.
-                if (finishes.includes('foil')) {
-                    resolvedFinish = 'foil';
-                } else if (finishes.includes('etched')) {
-                    resolvedFinish = 'etched';
-                } else {
-                    // Si el usuario exige Solo Foil y no está disponible, eliminamos el ítem del carrito
-                    carrito.delete(oldUniqueItemId);
-                    actualizarVistaCarrito();
-                    return; // Terminamos la ejecución
+                    resolvedFinish = 'nonfoil'; // Se mantiene Normal si no hay opción Foil
                 }
             } 
             
@@ -487,11 +500,9 @@
         }
 
         /**
-         * Finaliza la compra, genera el resumen y muestra el modal.
+         * Genera el resumen del pedido como una cadena de texto.
          */
-        function finalizarCompra() {
-            if (carrito.size === 0) return;
-
+        function generarResumenPedido() {
             let resumen = "--- PEDIDO DE CARTAS MAGIC ---\n";
             let totalCartas = 0;
             
@@ -504,14 +515,53 @@
 
             resumen += `\nTotal de items: ${totalCartas}`;
             resumen += "\n--- FIN DEL PEDIDO ---";
+            
+            return { resumen, totalCartas };
+        }
 
-            const subject = encodeURIComponent(`Pedido MTG: ${totalCartas} cartas`);
+        /**
+         * Finaliza la compra, genera el resumen del pedido y muestra el modal.
+         */
+        function finalizarCompra() {
+            if (carrito.size === 0) return;
+            
+            const { resumen, totalCartas } = generarResumenPedido();
+
+            // Asunto genérico para el correo
+            const subject = encodeURIComponent(`Nuevo Pedido MTG: ${totalCartas} cartas`);
             const body = encodeURIComponent(resumen);
             const mailtoLink = `mailto:${TARGET_EMAIL}?subject=${subject}&body=${body}`;
 
+            // Actualiza el enlace del botón de enviar email
             btnEnviarEmail.href = mailtoLink;
 
             mostrarModalOrden(resumen);
+        }
+        
+        /**
+         * COPIA el resumen del pedido al portapapeles.
+         */
+        function copiarResumen() {
+            const resumenTexto = ordenResumenPre.textContent;
+            
+            // Usa execCommand('copy') como fallback para entornos iframe
+            try {
+                const tempTextArea = document.createElement('textarea');
+                tempTextArea.value = resumenTexto;
+                tempTextArea.style.position = 'fixed'; // Para que no interfiera con el scroll
+                document.body.appendChild(tempTextArea);
+                tempTextArea.focus();
+                tempTextArea.select();
+                
+                // Ejecuta el comando de copia
+                document.execCommand('copy');
+                document.body.removeChild(tempTextArea);
+                
+                showNotification('¡Lista copiada al portapapeles!');
+            } catch (err) {
+                console.error('No se pudo copiar el texto: ', err);
+                showNotification('Error al copiar. Intenta copiar manualmente.');
+            }
         }
 
         /**
@@ -541,31 +591,21 @@
         }
 
         /**
-         * Genera las opciones de acabado para el selector del carrito, incluyendo "Solo Foil".
+         * Genera las opciones de acabado para el selector del carrito (solo 2 opciones).
          */
         function generarOpcionesAcabado(item) {
             const finishes = item.finishes;
             const hasFoilOption = finishes.includes('foil') || finishes.includes('etched');
             let options = '';
-            let selectedPref = 'nonfoil'; // Opción por defecto
             
-            // Determinar qué preferencia debería estar seleccionada actualmente
-            if (item.finish === 'foil' || item.finish === 'etched') {
-                // Si la carta actual es foil/etched, debe seleccionarse la preferencia foil. 
-                // Usaremos 'foil_preference' si está disponible, o 'foil_only' si el usuario sólo tiene esa opción.
-                selectedPref = 'foil_preference';
-            }
-
             // Opción 1: Normal (nonfoil)
             options += `<option value="nonfoil" ${item.finish === 'nonfoil' ? 'selected' : ''}>Normal</option>`;
 
             if (hasFoilOption) {
                 // Opción 2: Foil (si es posible) - preferencia genérica
-                // Se selecciona si el acabado actual es foil/etched, asumiendo que es la preferencia más común.
-                options += `<option value="foil_preference" ${selectedPref === 'foil_preference' && (item.finish === 'foil' || item.finish === 'etched') ? 'selected' : ''}>Foil (si es posible)</option>`;
-
-                // Opción 3: Solo Foil (exige acabado)
-                options += `<option value="foil_only" ${selectedPref === 'foil_only' && (item.finish === 'foil' || item.finish === 'etched') ? 'selected' : ''}>Solo Foil</option>`;
+                // Se selecciona si el acabado actual es foil/etched
+                const isFoilPrefSelected = (item.finish === 'foil' || item.finish === 'etched');
+                options += `<option value="foil_preference" ${isFoilPrefSelected ? 'selected' : ''}>Foil (si es posible)</option>`;
             } 
             
             return options;
