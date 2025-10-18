@@ -425,7 +425,8 @@
                     prices: cardData.prices,
                     finish: resolvedFinish, // Almacena el acabado resuelto
                     finishes: cardData.finishes || ['nonfoil'], // Guarda todos los acabados disponibles para la selección futura
-                    quantity: 1
+                    quantity: 1,
+                    collector_number: cardData.collector_number || 'N/A' // Guardar el número de coleccionista
                 });
             } else {
                 const item = carrito.get(uniqueItemId);
@@ -477,7 +478,7 @@
                 existingItem.quantity += newQuantity;
                 carrito.set(newUniqueItemId, existingItem);
             } else {
-                // Crear nuevo objeto con el acabado resuelto
+                // Crear nuevo objeto con el acabado resuelto. Mantiene el collector_number
                 const newItem = { ...oldItem, finish: resolvedFinish, uniqueItemId: newUniqueItemId, quantity: newQuantity };
                 carrito.set(newUniqueItemId, newItem);
             }
@@ -509,7 +510,9 @@
             carrito.forEach(item => {
                 const precio = item.prices.usd ? `$${item.prices.usd} USD` : 'Precio N/A';
                 const finishDisplay = getDisplayFinish(item.finish); 
-                resumen += `${item.quantity}x ${item.name} (${item.set}) [${finishDisplay}] - ${precio}\n`;
+                
+                // INCLUYE EL NÚMERO DE COLECCIONISTA
+                resumen += `${item.quantity}x ${item.name} (${item.set} #${item.collector_number}) [${finishDisplay}] - ${precio}\n`;
                 totalCartas += item.quantity;
             });
 
@@ -650,7 +653,7 @@
                         <p class="truncate text-sm font-semibold mr-4">
                             <span class="font-bold text-amber-300">${item.quantity}x</span> 
                             ${item.name} 
-                            <span class="text-green-400 font-normal ml-1">(${item.set})</span>
+                            <span class="text-green-400 font-normal ml-1">(${item.set} #${item.collector_number})</span> <!-- Número de Coleccionista Agregado -->
                         </p>
                         
                         <!-- Selector de Acabado -->
