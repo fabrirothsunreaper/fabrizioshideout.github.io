@@ -533,11 +533,10 @@
             let totalCartas = 0;
             
             carrito.forEach(item => {
-                const precio = item.prices.usd ? `$${item.prices.usd} USD (TCGPlayer)` : 'Precio N/A';
                 const finishDisplay = getDisplayFinish(item.finish); 
                 
-                // INCLUYE EL NÚMERO DE COLECCIONISTA
-                resumen += `${item.quantity}x ${item.name} (${item.set} #${item.collector_number}) [${finishDisplay}] - ${precio}\n`;
+                // ELIMINADO: referencia a TCGPlayer y precio
+                resumen += `${item.quantity}x ${item.name} (${item.set} #${item.collector_number}) [${finishDisplay}]\n`;
                 totalCartas += item.quantity;
             });
 
@@ -549,20 +548,19 @@
 
         /**
          * Genera el resumen del pedido en formato CSV (Comma Separated Values) para hojas de cálculo.
-         * Nota: Los precios son de TCGPlayer (USD), ya que Card Kingdom no está disponible vía Scryfall.
          */
         function generarResumenCSV() {
-            // Cabecera CSV
-            let csv = "Cantidad,Nombre,Set Code,Num.Coleccionista,Acabado,Precio TCGPlayer (USD)\n";
+            // ELIMINADO: Columna de precio
+            let csv = "Cantidad,Nombre,Set Code,Num.Coleccionista,Acabado\n";
             
             carrito.forEach(item => {
-                const precioUSD = item.prices.usd || 'N/A';
                 const finishDisplay = getDisplayFinish(item.finish); 
                 
                 // Escapa comas en el nombre
                 const escapedName = `"${item.name.replace(/"/g, '""')}"`;
 
-                csv += `${item.quantity},${escapedName},${item.set},${item.collector_number},${finishDisplay},${precioUSD}\n`;
+                // ELIMINADO: Valor del precio USD
+                csv += `${item.quantity},${escapedName},${item.set},${item.collector_number},${finishDisplay}\n`;
             });
 
             return csv;
