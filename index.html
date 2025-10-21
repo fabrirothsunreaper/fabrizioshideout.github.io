@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fabrizio's Hideout</title>
     <!-- Carga de Tailwind CSS para estilos --><script src="https://cdn.tailwindcss.com"></script>
-    <!-- Google Fonts para la nueva fuente condensada -->
+    <!-- Google Fonts para la fuente condensada Teko -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Teko:wght@500;700&display=swap" rel="stylesheet">
@@ -41,8 +41,10 @@
         }
         /* Fuente tipo Runic/Condensed para el título */
         .ff-title {
-            font-family: 'Teko', sans-serif; /* CAMBIADO a Teko para un estilo condensado */
+            font-family: 'Teko', sans-serif; /* Fuente Teko aplicada */
             font-weight: 700; /* Asegura que sea fuerte */
+            font-size: 5rem; /* Ajuste para que se vea más impactante */
+            line-height: 1;
             text-shadow: 
                 0 0 5px rgba(255, 215, 0, 0.5), /* Resplandor dorado tenue */
                 0 0 10px rgba(255, 215, 0, 0.3);
@@ -81,6 +83,29 @@
         .back-face {
             transform: rotateY(180deg);
         }
+
+        /* Estilos específicos para el autocompletado */
+        .autocomplete-container {
+            position: relative;
+        }
+        .autocomplete-suggestions {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            z-index: 50; /* Asegura que esté sobre otros elementos */
+            max-height: 200px;
+            overflow-y: auto;
+            border-top: none;
+        }
+        .suggestion-item {
+            padding: 8px 12px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .suggestion-item:hover, .suggestion-item.active {
+            background-color: #3f3f46; /* gray-700 */
+        }
     </style>
 </head>
 <body class="bg-gray-900 text-white min-h-screen card-container">
@@ -90,12 +115,21 @@
         </h1>
 
         <!-- Contenedor de Búsqueda --><div id="busqueda-container" class="bg-gray-800 p-6 rounded-xl shadow-2xl mb-8 flex flex-col sm:flex-row items-center justify-center space-y-4 sm:space-y-0 sm:space-x-4 max-w-3xl mx-auto border-t-4 border-amber-600">
-            <input 
-                type="text" 
-                id="termino-busqueda" 
-                placeholder="Ej: 'Plains', 'Chandra', o el nombre en español 'Gigante de Hueso'. Filtros avanzados, en inglés."
-                class="w-full sm:w-2/3 p-3 text-gray-900 bg-gray-200 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 transition duration-150"
-            >
+            
+            <!-- Contenedor de Autocompletado --><div class="w-full sm:w-2/3 autocomplete-container">
+                <input 
+                    type="text" 
+                    id="termino-busqueda" 
+                    placeholder="Ej: 'Plains', 'Chandra', o el nombre en español 'Gigante de Hueso'. Filtros avanzados, en inglés."
+                    class="w-full p-3 text-gray-900 bg-gray-200 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 transition duration-150"
+                    onkeyup="handleAutocomplete(event)"
+                    onblur="clearSuggestions()"
+                >
+                <div id="autocomplete-suggestions" class="autocomplete-suggestions bg-gray-800 border border-gray-600 rounded-b-lg shadow-lg">
+                    <!-- Sugerencias se insertarán aquí -->
+                </div>
+            </div>
+            
             <button 
                 onclick="buscarCartas()" 
                 class="w-full sm:w-1/3 bg-red-700 hover:bg-red-800 text-white font-bold py-3 rounded-lg shadow-md transition duration-150 transform hover:scale-105"
@@ -180,6 +214,9 @@
         // --- CONSTANTES Y REFERENCIAS GLOBALES ---
         const API_URL = 'https://api.scryfall.com/cards/search?q=';
         const TARGET_EMAIL = 'fabriroth.sunreaper@gmail.com'; 
+        
+        // La API de Card Kingdom ya no está activa en este estado. Se usa un marcador de posición.
+        const CK_PRICE_PLACEHOLDER = '[Precio Manual]'; 
 
         // --- REFERENCIAS DEL DOM ---
         const resultadosDiv = document.getElementById('resultados');
@@ -193,10 +230,15 @@
         const ordenResumenPre = document.getElementById('orden-resumen'); 
         const btnEnviarEmail = document.getElementById('btn-enviar-email');
         const copyNotification = document.getElementById('copy-notification'); 
+        const terminoBusquedaInput = document.getElementById('termino-busqueda');
+        const suggestionsDiv = document.getElementById('autocomplete-suggestions');
+
 
         // Almacenamiento global para el carrito: Map<uniqueItemId, itemObject>
         let carrito = new Map(); 
         let totalCardsDisplayed = 0; 
+        let autocompleteTimeout;
+        let activeSuggestionIndex = -1; // Índice de la sugerencia activa para navegación por teclado
         
         // Función auxiliar para un pequeño retardo entre llamadas (buena práctica para la API de Scryfall)
         const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -228,14 +270,114 @@
             }, 3000);
         }
 
-        // --- FUNCIONES DE BÚSQUEDA ---
+        // --- FUNCIONES DE AUTOCOMPLETADO ---
+
+        function clearSuggestions() {
+            // Se usa un pequeño delay para que el evento click en la sugerencia se dispare ANTES del onblur
+            setTimeout(() => {
+                suggestionsDiv.innerHTML = '';
+                activeSuggestionIndex = -1;
+            }, 200);
+        }
+        
+        function selectSuggestion(suggestion) {
+            terminoBusquedaInput.value = suggestion;
+            clearSuggestions();
+            // Opcional: Ejecutar la búsqueda principal al seleccionar
+            buscarCartas(); 
+        }
+
+        function renderSuggestions(suggestions) {
+            suggestionsDiv.innerHTML = '';
+            activeSuggestionIndex = -1; // Resetear el índice
+            
+            if (suggestions && suggestions.length > 0) {
+                suggestions.forEach((suggestion, index) => {
+                    const item = document.createElement('div');
+                    item.className = 'suggestion-item text-gray-200 border-b border-gray-700 last:border-b-0';
+                    item.textContent = suggestion;
+                    item.setAttribute('data-index', index);
+                    
+                    item.onmousedown = (e) => {
+                        e.preventDefault(); // Evita que onblur se dispare antes del click
+                    };
+
+                    item.onclick = () => selectSuggestion(suggestion);
+
+                    suggestionsDiv.appendChild(item);
+                });
+            }
+        }
+
+        async function autocompleteSearch(term) {
+            if (term.length < 4) {
+                clearSuggestions();
+                return;
+            }
+
+            try {
+                // Endpoint rápido de autocompletado de Scryfall
+                const response = await fetch(`https://api.scryfall.com/cards/autocomplete?q=${encodeURIComponent(term)}`);
+                const data = await response.json();
+
+                if (data.data && data.data.length > 0) {
+                    renderSuggestions(data.data);
+                } else {
+                    clearSuggestions();
+                }
+            } catch (error) {
+                console.error("Error fetching autocomplete:", error);
+                clearSuggestions();
+            }
+        }
+        
+        function handleAutocomplete(event) {
+            const term = event.target.value.trim();
+            
+            // Navegación por teclado (Flechas y Enter)
+            const suggestions = Array.from(suggestionsDiv.children);
+            
+            if (suggestions.length > 0) {
+                if (event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    activeSuggestionIndex = (activeSuggestionIndex + 1) % suggestions.length;
+                } else if (event.key === 'ArrowUp') {
+                    event.preventDefault();
+                    activeSuggestionIndex = (activeSuggestionIndex - 1 + suggestions.length) % suggestions.length;
+                } else if (event.key === 'Enter' && activeSuggestionIndex !== -1) {
+                    event.preventDefault();
+                    selectSuggestion(suggestions[activeSuggestionIndex].textContent);
+                    return;
+                }
+                
+                // Actualizar clases 'active' y scroll
+                suggestions.forEach((item, index) => {
+                    item.classList.remove('active', 'bg-gray-700');
+                    if (index === activeSuggestionIndex) {
+                        item.classList.add('active', 'bg-gray-700');
+                        item.scrollIntoView({ block: 'nearest' });
+                    }
+                });
+            }
+
+            // Si no es navegación, iniciar la búsqueda con delay
+            if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp' && event.key !== 'Enter') {
+                clearTimeout(autocompleteTimeout);
+                autocompleteTimeout = setTimeout(() => {
+                    autocompleteSearch(term);
+                }, 300);
+            }
+        }
+        
+        // --- FUNCIONES DE BÚSQUEDA PRINCIPAL ---
 
         /**
          * Realiza la búsqueda inicial de todas las cartas que coincidan con el término
          * y luego busca todas las impresiones (prints) en inglés para cada una de ellas.
          */
         async function buscarCartas() {
-            const termino = document.getElementById('termino-busqueda').value.trim();
+            clearSuggestions(); // Ocultar sugerencias al buscar
+            const termino = terminoBusquedaInput.value.trim();
             resultadosDiv.innerHTML = ''; 
             estadoP.textContent = ''; 
             totalCardsDisplayed = 0; 
@@ -276,7 +418,10 @@
                         return Promise.resolve(); 
                     });
 
-                    await Promise.all(fetchPromises);
+                    for (const promise of fetchPromises) {
+                        await promise;
+                    }
+
 
                     if (totalCardsDisplayed > 0) {
                         estadoP.textContent = `✅ Búsqueda completa. Se encontraron y mostraron ${totalCardsDisplayed} impresiones en inglés de ${uniqueCards.length} cartas únicas.`;
@@ -378,7 +523,18 @@
                         <img src="${imagen_uri}" alt="Imagen de ${carta.name}" class="w-full h-[252px] object-cover rounded-t-xl" onerror="this.onerror=null; this.src='https://placehold.co/680x960/FFD700/000?text=Card+No+Image'">
                         <div class="p-2 text-center flex-shrink-0">
                             <h3 class="text-sm font-bold text-amber-300 truncate">${carta.name}</h3>
-                            <p class="text-xs text-gray-400">${carta.set_name} (${carta.set.toUpperCase()})</p>
+                            <p class="text-xs text-gray-400 mb-1">${carta.set_name} (${carta.set.toUpperCase()})</p>
+                            
+                            <!-- Área de Precio CK en Resultados -->
+                            <div class="flex flex-col space-y-1 mt-1">
+                                <span class="text-xs text-gray-400">Precio CK: <span class="font-bold text-yellow-300">${CK_PRICE_PLACEHOLDER}</span></span>
+                                <button onclick="marcarPrecioManual(this)" 
+                                    data-card-id="${carta.id}" 
+                                    class="w-full bg-gray-600 hover:bg-gray-700 text-white text-xs py-1 rounded-lg transition duration-150 transform hover:scale-[1.02] mt-1"
+                                >
+                                    Ver Precio CK (Manual)
+                                </button>
+                            </div>
                         </div>
                     `;
                 }
@@ -406,6 +562,18 @@
                 }
             });
         }
+        
+        /**
+         * Función simple de placeholder para resultados de búsqueda.
+         */
+        function marcarPrecioManual(buttonElement) {
+             const priceSpan = buttonElement.parentElement.querySelector('span:last-child');
+             priceSpan.textContent = '[Ver en Hoja]';
+             buttonElement.textContent = 'Precio Manual Listo';
+             buttonElement.disabled = true;
+             buttonElement.classList.add('opacity-50');
+        }
+
 
         /**
          * Genera el HTML para una cara de una carta (simple o doble).
@@ -435,11 +603,11 @@
             const cardWrapper = buttonElement.closest('.card-result');
             const cardData = JSON.parse(cardWrapper.dataset.cardData);
             
-            // Siempre añadimos la versión Normal por defecto.
             const resolvedFinish = 'nonfoil'; 
-            
-            // Usa Card ID, Set code, y el acabado RESUELTO para crear un identificador único
             const uniqueItemId = `${cardId}-${cardData.set}-${resolvedFinish}`; 
+            
+            // Usamos el placeholder fijo
+            const fixedCKPrice = CK_PRICE_PLACEHOLDER;
 
             if (!carrito.has(uniqueItemId)) {
                 carrito.set(uniqueItemId, {
@@ -447,11 +615,11 @@
                     name: cardData.name,
                     set_name: cardData.set_name,
                     set: cardData.set.toUpperCase(),
-                    prices: cardData.prices,
-                    finish: resolvedFinish, // Almacena el acabado resuelto
-                    finishes: cardData.finishes || ['nonfoil'], // Guarda todos los acabados disponibles para la selección futura
+                    finish: resolvedFinish, 
+                    finishes: cardData.finishes || ['nonfoil'], 
                     quantity: 1,
-                    collector_number: cardData.collector_number || 'N/A' // Guardar el número de coleccionista
+                    collector_number: cardData.collector_number || 'N/A',
+                    ckPrice: fixedCKPrice, // Precio fijo/manual
                 });
             } else {
                 const item = carrito.get(uniqueItemId);
@@ -470,7 +638,7 @@
             const oldItem = carrito.get(oldUniqueItemId);
             if (!oldItem) return;
 
-            let resolvedFinish = oldItem.finish; // Mantener si no cambia
+            let resolvedFinish = oldItem.finish; 
             const finishes = oldItem.finishes;
 
             // --- Lógica de Resolución (solo Normal o Foil Preferencia) ---
@@ -484,11 +652,10 @@
                 } else if (finishes.includes('etched')) {
                     resolvedFinish = 'etched'; 
                 } else {
-                    resolvedFinish = 'nonfoil'; // Se mantiene Normal si no hay opción Foil
+                    resolvedFinish = 'nonfoil'; 
                 }
             } 
             
-            // Si el acabado resuelto no ha cambiado, no hacemos nada más.
             if (resolvedFinish === oldItem.finish) return;
 
             // 1. Crear el nuevo ID único
@@ -498,13 +665,18 @@
             const newQuantity = oldItem.quantity;
             
             if (carrito.has(newUniqueItemId)) {
-                // Si ya existe el nuevo acabado, fusionamos las cantidades
                 const existingItem = carrito.get(newUniqueItemId);
                 existingItem.quantity += newQuantity;
                 carrito.set(newUniqueItemId, existingItem);
             } else {
-                // Crear nuevo objeto con el acabado resuelto. Mantiene el collector_number
-                const newItem = { ...oldItem, finish: resolvedFinish, uniqueItemId: newUniqueItemId, quantity: newQuantity };
+                // Crear nuevo objeto con el acabado resuelto. Mantiene el precio placeholder.
+                const newItem = { 
+                    ...oldItem, 
+                    finish: resolvedFinish, 
+                    uniqueItemId: newUniqueItemId, 
+                    quantity: newQuantity,
+                    ckPrice: CK_PRICE_PLACEHOLDER // Precio fijo/manual
+                };
                 carrito.set(newUniqueItemId, newItem);
             }
 
@@ -534,9 +706,10 @@
             
             carrito.forEach(item => {
                 const finishDisplay = getDisplayFinish(item.finish); 
+                const price = item.ckPrice; // Ahora es el placeholder
                 
-                // ELIMINADO: referencia a TCGPlayer y precio
-                resumen += `${item.quantity}x ${item.name} (${item.set} #${item.collector_number}) [${finishDisplay}]\n`;
+                // Formato: Cantidad x Nombre (SET #NUM) [Acabado] | Precio CK
+                resumen += `${item.quantity}x ${item.name} (${item.set} #${item.collector_number}) [${finishDisplay}] | CK: ${price}\n`;
                 totalCartas += item.quantity;
             });
 
@@ -550,17 +723,18 @@
          * Genera el resumen del pedido en formato CSV (Comma Separated Values) para hojas de cálculo.
          */
         function generarResumenCSV() {
-            // ELIMINADO: Columna de precio
-            let csv = "Cantidad,Nombre,Set Code,Num.Coleccionista,Acabado\n";
+            // Cabecera CSV: Ahora incluye el Precio de Card Kingdom (placeholder)
+            let csv = "Cantidad,Nombre,Set Code,Num.Coleccionista,Acabado,Precio CK\n";
             
             carrito.forEach(item => {
                 const finishDisplay = getDisplayFinish(item.finish); 
+                const price = item.ckPrice;
                 
                 // Escapa comas en el nombre
                 const escapedName = `"${item.name.replace(/"/g, '""')}"`;
 
-                // ELIMINADO: Valor del precio USD
-                csv += `${item.quantity},${escapedName},${item.set},${item.collector_number},${finishDisplay}\n`;
+                // Valores CSV
+                csv += `${item.quantity},${escapedName},${item.set},${item.collector_number},${finishDisplay},${price}\n`;
             });
 
             return csv;
@@ -589,7 +763,7 @@
          * COPIA el resumen del pedido al portapapeles en formato CSV.
          */
         function copiarResumen() {
-            const resumenTexto = generarResumenCSV(); // Usa el nuevo formato CSV para la copia
+            const resumenTexto = generarResumenCSV(); // Usa el formato CSV para la copia
             
             // Usa execCommand('copy') como fallback para entornos iframe
             try {
@@ -658,9 +832,9 @@
             return options;
         }
 
-
         /**
-         * Actualiza el contenido visual del carrito y el estado de los botones.
+         * Actualiza el contenido visual del carrito y el estado de los botones,
+         * de forma SÍNCRONA (sin llamadas externas).
          */
         function actualizarVistaCarrito() {
             listaCarritoDiv.innerHTML = '';
@@ -688,35 +862,48 @@
                 totalCartas += item.quantity;
                 const finishOptionsHTML = generarOpcionesAcabado(item);
                 
+                // El precio es siempre el placeholder en este estado
+                const currentPrice = item.ckPrice;
+                
                 const listItem = document.createElement('div');
                 listItem.className = 'flex flex-col sm:flex-row justify-between items-start sm:items-center bg-gray-900 p-2 rounded-lg shadow-md border border-gray-700 space-y-2 sm:space-y-0';
                 
                 listItem.innerHTML = `
-                    <div class="flex-1 w-full sm:w-auto flex flex-col sm:flex-row items-start sm:items-center">
-                        <!-- Nombre y Cantidad --><p class="truncate text-sm font-semibold mr-4">
+                    <div class="flex-1 w-full flex flex-col sm:flex-row items-start sm:items-center space-y-1 sm:space-y-0 sm:space-x-3">
+                        
+                        <p class="truncate text-sm font-semibold">
                             <span class="font-bold text-amber-300">${item.quantity}x</span> 
                             ${item.name} 
-                            <span class="text-green-400 font-normal ml-1">(${item.set} #${item.collector_number})</span> <!-- Número de Coleccionista Agregado --></p>
+                            <span class="text-green-400 font-normal ml-1">(${item.set} #${item.collector_number})</span>
+                        </p>
                         
-                        <!-- Selector de Acabado --><select 
+                        <!-- Columna de PRECIO Y TOTAL (ahora solo muestra el placeholder CK) -->
+                        <div class="flex items-center space-x-2 text-sm">
+                            <p class="text-gray-400">CK:</p>
+                            <span class="text-yellow-300 font-bold">${currentPrice}</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Selector y Eliminar -->
+                    <div class="flex items-center space-x-2 flex-shrink-0 w-full sm:w-auto mt-1 sm:mt-0">
+                        <select 
                             onchange="cambiarAcabadoCarrito('${uniqueItemId}', this.value)"
-                            class="text-xs bg-gray-700 border border-gray-600 text-white rounded p-1 focus:ring-amber-500 focus:border-amber-500 w-full sm:w-auto mt-1 sm:mt-0"
+                            class="text-xs bg-gray-700 border border-gray-600 text-white rounded p-1 focus:ring-amber-500 focus:border-amber-500 flex-1"
                         >
                             ${finishOptionsHTML}
                         </select>
+                        <button onclick="eliminarDelCarrito('${uniqueItemId}')" 
+                            class="text-red-400 hover:text-red-500 font-bold text-xs transition duration-150">
+                            Eliminar
+                        </button>
                     </div>
-                    
-                    <!-- Botón de Eliminar --><button onclick="eliminarDelCarrito('${uniqueItemId}')" 
-                        class="text-red-400 hover:text-red-500 font-bold text-xs transition duration-150 flex-shrink-0 mt-1 sm:mt-0">
-                        Eliminar
-                    </button>
                 `;
                 listaCarritoDiv.appendChild(listItem);
             });
             
             contadorCarritoSpan.textContent = totalCartas;
             
-            // Habilitar botones
+            // Habilitar botones (ya que la lista ya ha sido renderizada)
             btnVaciar.disabled = false;
             btnVaciar.classList.remove('opacity-50', 'cursor-not-allowed');
             btnVaciar.classList.add('hover:scale-[1.01]');
