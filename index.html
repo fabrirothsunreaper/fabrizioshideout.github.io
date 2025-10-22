@@ -214,9 +214,6 @@
         // --- CONSTANTES Y REFERENCIAS GLOBALES ---
         const API_URL = 'https://api.scryfall.com/cards/search?q=';
         const TARGET_EMAIL = 'fabriroth.sunreaper@gmail.com'; 
-        
-        // La API de Card Kingdom ya no está activa en este estado. Se usa un marcador de posición.
-        const CK_PRICE_PLACEHOLDER = '[Precio Manual]'; 
 
         // --- REFERENCIAS DEL DOM ---
         const resultadosDiv = document.getElementById('resultados');
@@ -525,16 +522,8 @@
                             <h3 class="text-sm font-bold text-amber-300 truncate">${carta.name}</h3>
                             <p class="text-xs text-gray-400 mb-1">${carta.set_name} (${carta.set.toUpperCase()})</p>
                             
-                            <!-- Área de Precio CK en Resultados -->
-                            <div class="flex flex-col space-y-1 mt-1">
-                                <span class="text-xs text-gray-400">Precio CK: <span class="font-bold text-yellow-300">${CK_PRICE_PLACEHOLDER}</span></span>
-                                <button onclick="marcarPrecioManual(this)" 
-                                    data-card-id="${carta.id}" 
-                                    class="w-full bg-gray-600 hover:bg-gray-700 text-white text-xs py-1 rounded-lg transition duration-150 transform hover:scale-[1.02] mt-1"
-                                >
-                                    Ver Precio CK (Manual)
-                                </button>
-                            </div>
+                            <!-- Área de Precio (Eliminada) -->
+                            
                         </div>
                     `;
                 }
@@ -564,14 +553,10 @@
         }
         
         /**
-         * Función simple de placeholder para resultados de búsqueda.
+         * Función simple de placeholder para resultados de búsqueda. (Función marcada para eliminación, pero su invocación ya fue removida)
          */
         function marcarPrecioManual(buttonElement) {
-             const priceSpan = buttonElement.parentElement.querySelector('span:last-child');
-             priceSpan.textContent = '[Ver en Hoja]';
-             buttonElement.textContent = 'Precio Manual Listo';
-             buttonElement.disabled = true;
-             buttonElement.classList.add('opacity-50');
+             /* Lógica de precio manual eliminada */
         }
 
 
@@ -606,9 +591,8 @@
             const resolvedFinish = 'nonfoil'; 
             const uniqueItemId = `${cardId}-${cardData.set}-${resolvedFinish}`; 
             
-            // Usamos el placeholder fijo
-            const fixedCKPrice = CK_PRICE_PLACEHOLDER;
-
+            // ELIMINADO: Usamos el placeholder fijo o precio
+            
             if (!carrito.has(uniqueItemId)) {
                 carrito.set(uniqueItemId, {
                     id: cardId, 
@@ -619,7 +603,7 @@
                     finishes: cardData.finishes || ['nonfoil'], 
                     quantity: 1,
                     collector_number: cardData.collector_number || 'N/A',
-                    ckPrice: fixedCKPrice, // Precio fijo/manual
+                    // ELIMINADO: ckPrice
                 });
             } else {
                 const item = carrito.get(uniqueItemId);
@@ -669,14 +653,15 @@
                 existingItem.quantity += newQuantity;
                 carrito.set(newUniqueItemId, existingItem);
             } else {
-                // Crear nuevo objeto con el acabado resuelto. Mantiene el precio placeholder.
+                // Crear nuevo objeto con el acabado resuelto. Mantiene solo las propiedades relevantes.
                 const newItem = { 
                     ...oldItem, 
                     finish: resolvedFinish, 
                     uniqueItemId: newUniqueItemId, 
                     quantity: newQuantity,
-                    ckPrice: CK_PRICE_PLACEHOLDER // Precio fijo/manual
+                    // ELIMINADO: ckPrice
                 };
+                delete newItem.ckPrice; // Aseguramos que no se herede si la propiedad existía
                 carrito.set(newUniqueItemId, newItem);
             }
 
@@ -706,10 +691,9 @@
             
             carrito.forEach(item => {
                 const finishDisplay = getDisplayFinish(item.finish); 
-                const price = item.ckPrice; // Ahora es el placeholder
                 
-                // Formato: Cantidad x Nombre (SET #NUM) [Acabado] | Precio CK
-                resumen += `${item.quantity}x ${item.name} (${item.set} #${item.collector_number}) [${finishDisplay}] | CK: ${price}\n`;
+                // Formato: Cantidad x Nombre (SET #NUM) [Acabado] (ELIMINADO: | Precio CK)
+                resumen += `${item.quantity}x ${item.name} (${item.set} #${item.collector_number}) [${finishDisplay}]\n`;
                 totalCartas += item.quantity;
             });
 
@@ -723,18 +707,17 @@
          * Genera el resumen del pedido en formato CSV (Comma Separated Values) para hojas de cálculo.
          */
         function generarResumenCSV() {
-            // Cabecera CSV: Ahora incluye el Precio de Card Kingdom (placeholder)
-            let csv = "Cantidad,Nombre,Set Code,Num.Coleccionista,Acabado,Precio CK\n";
+            // Cabecera CSV: ELIMINADA la columna de precio
+            let csv = "Cantidad,Nombre,Set Code,Num.Coleccionista,Acabado\n";
             
             carrito.forEach(item => {
                 const finishDisplay = getDisplayFinish(item.finish); 
-                const price = item.ckPrice;
                 
                 // Escapa comas en el nombre
                 const escapedName = `"${item.name.replace(/"/g, '""')}"`;
 
-                // Valores CSV
-                csv += `${item.quantity},${escapedName},${item.set},${item.collector_number},${finishDisplay},${price}\n`;
+                // Valores CSV (ELIMINADO: Precio CK)
+                csv += `${item.quantity},${escapedName},${item.set},${item.collector_number},${finishDisplay}\n`;
             });
 
             return csv;
@@ -862,9 +845,6 @@
                 totalCartas += item.quantity;
                 const finishOptionsHTML = generarOpcionesAcabado(item);
                 
-                // El precio es siempre el placeholder en este estado
-                const currentPrice = item.ckPrice;
-                
                 const listItem = document.createElement('div');
                 listItem.className = 'flex flex-col sm:flex-row justify-between items-start sm:items-center bg-gray-900 p-2 rounded-lg shadow-md border border-gray-700 space-y-2 sm:space-y-0';
                 
@@ -877,11 +857,7 @@
                             <span class="text-green-400 font-normal ml-1">(${item.set} #${item.collector_number})</span>
                         </p>
                         
-                        <!-- Columna de PRECIO Y TOTAL (ahora solo muestra el placeholder CK) -->
-                        <div class="flex items-center space-x-2 text-sm">
-                            <p class="text-gray-400">CK:</p>
-                            <span class="text-yellow-300 font-bold">${currentPrice}</span>
-                        </div>
+                        <!-- Columna de PRECIO eliminada del display -->
                     </div>
                     
                     <!-- Selector y Eliminar -->
